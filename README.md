@@ -292,7 +292,7 @@ NiksonOS is built on the shoulders of the open-source community:
 | **Calamares** | [calamares.io](https://calamares.io) |
 | **Tor Project** | [torproject.org](https://torproject.org) |
 
-**Created by:** Krish Ghosh — Netrinix Academy, Batch BATCH-042026, Track 5: AI Hacking & Security
+**Created by:** Krish Ghosh 
 
 ---
 
