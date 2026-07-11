@@ -1,0 +1,262 @@
+#!/bin/bash
+
+# ============================================================
+#   NIKSON-SYSMON — Live System Monitor v2.0
+#   NiksonOS Custom Tool
+# ============================================================
+
+GREEN='\033[0;32m'
+LGREEN='\033[1;32m'
+RED='\033[0;31m'
+LRED='\033[1;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+LCYAN='\033[1;36m'
+BLUE='\033[0;34m'
+LBLUE='\033[1;34m'
+MAGENTA='\033[0;35m'
+LMAGENTA='\033[1;35m'
+DIM='\033[2m'
+BOLD='\033[1m'
+NC='\033[0m'
+BG_DARK='\033[40m'
+
+BAR_WIDTH=28
+
+draw_bar() {
+    local percent=$1
+    local filled=$(( percent * BAR_WIDTH / 100 ))
+    local empty=$(( BAR_WIDTH - filled ))
+    local color
+
+    if   [ "$percent" -ge 80 ]; then color=$LRED
+    elif [ "$percent" -ge 50 ]; then color=$YELLOW
+    else color=$LGREEN
+    fi
+
+    printf "${DIM}[${NC}${color}"
+    printf '%0.s█' $(seq 1 $filled) 2>/dev/null
+    printf "${DIM}"
+    printf '%0.s░' $(seq 1 $empty) 2>/dev/null
+    printf "${NC}${DIM}]${NC} ${color}${BOLD}%3d%%${NC}" "$percent"
+}
+
+get_cpu() {
+    local cpu1 cpu2
+    read -r cpu1 < <(grep '^cpu ' /proc/stat)
+    sleep 0.5
+    read -r cpu2 < <(grep '^cpu ' /proc/stat)
+    local arr1=($cpu1) arr2=($cpu2)
+    local idle1=${arr1[4]} idle2=${arr2[4]}
+    local total1=0 total2=0
+    for v in "${arr1[@]:1}"; do (( total1 += v )); done
+    for v in "${arr2[@]:1}"; do (( total2 += v )); done
+    local dtotal=$(( total2 - total1 ))
+    local didle=$(( idle2 - idle1 ))
+    [ "$dtotal" -eq 0 ] && echo 0 && return
+    echo $(( (dtotal - didle) * 100 / dtotal ))
+}
+
+get_ram() {
+    local total used free buffers cached
+    while IFS=': ' read -r key val unit; do
+        case "$key" in
+            MemTotal)  total=$val ;;
+            MemFree)   free=$val ;;
+            Buffers)   buffers=$val ;;
+            Cached)    cached=$val ;;
+        esac
+    done < /proc/meminfo
+    used=$(( total - free - buffers - cached ))
+    local percent=$(( used * 100 / total ))
+    local used_mb=$(( used / 1024 ))
+    local total_mb=$(( total / 1024 ))
+    echo "$percent $used_mb $total_mb"
+}
+
+get_disk() {
+    df / | awk 'NR==2 {
+        used=$3; total=$2
+        pct=int(used*100/total)
+        used_g=sprintf("%.1f", used/1024/1024)
+        total_g=sprintf("%.1f", total/1024/1024)
+        print pct, used_g, total_g
+    }'
+}
+
+get_net() {
+    local iface
+    iface=$(ip route | awk '/default/{print $5; exit}')
+    [ -z "$iface" ] && echo "0 0 N/A" && return
+    local rx1 tx1 rx2 tx2
+    rx1=$(cat /sys/class/net/$iface/statistics/rx_bytes 2>/dev/null || echo 0)
+    tx1=$(cat /sys/class/net/$iface/statistics/tx_bytes 2>/dev/null || echo 0)
+    sleep 0.5
+    rx2=$(cat /sys/class/net/$iface/statistics/rx_bytes 2>/dev/null || echo 0)
+    tx2=$(cat /sys/class/net/$iface/statistics/tx_bytes 2>/dev/null || echo 0)
+    local rx_speed=$(( (rx2 - rx1) * 2 / 1024 ))
+    local tx_speed=$(( (tx2 - tx1) * 2 / 1024 ))
+    echo "$rx_speed $tx_speed $iface"
+}
+
+get_temp() {
+    local temp_file
+    for f in /sys/class/thermal/thermal_zone*/temp; do
+        [ -f "$f" ] && temp_file="$f" && break
+    done
+    if [ -n "$temp_file" ]; then
+        local raw=$(cat "$temp_file")
+        echo $(( raw / 1000 ))
+    else
+        echo "N/A"
+    fi
+}
+
+get_procs() {
+    ps aux --sort=-%cpu 2>/dev/null | awk 'NR>1 && NR<=6 {
+        printf "%-22s %5s%% %5s%%\n", substr($11,1,22), $3, $4
+    }'
+}
+
+get_ip() {
+    ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || echo "N/A"
+}
+
+get_uptime() {
+    uptime -p 2>/dev/null | sed 's/up //' || echo "N/A"
+}
+
+get_kernel() {
+    uname -r
+}
+
+get_hostname() {
+    hostname
+}
+
+display() {
+    local cpu_pct ram_info disk_info net_info temp uptime_str ip_addr
+
+    cpu_pct=$(get_cpu)
+    ram_info=$(get_ram)
+    disk_info=$(get_disk)
+    net_info=$(get_net)
+    temp=$(get_temp)
+    uptime_str=$(get_uptime)
+    ip_addr=$(get_ip)
+
+    local ram_pct=$(echo $ram_info | cut -d' ' -f1)
+    local ram_used=$(echo $ram_info | cut -d' ' -f2)
+    local ram_total=$(echo $ram_info | cut -d' ' -f3)
+    local disk_pct=$(echo $disk_info | cut -d' ' -f1)
+    local disk_used=$(echo $disk_info | cut -d' ' -f2)
+    local disk_total=$(echo $disk_info | cut -d' ' -f3)
+    local net_rx=$(echo $net_info | cut -d' ' -f1)
+    local net_tx=$(echo $net_info | cut -d' ' -f2)
+    local net_iface=$(echo $net_info | cut -d' ' -f3)
+
+    clear
+    local cols=$(tput cols)
+    local line=$(printf '%*s' "$cols" | tr ' ' '═')
+    local thin=$(printf '%*s' "$cols" | tr ' ' '─')
+
+    # ── HEADER ──────────────────────────────────────────
+    echo -e "${CYAN}${line}${NC}"
+    echo -e "${LCYAN}${BOLD}"
+    echo "  ███╗   ██╗██╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗    ███████╗██╗   ██╗███████╗███╗   ███╗ ██████╗ ███╗  "
+    echo "  ████╗  ██║██║██║ ██╔╝██╔════╝██╔═══██╗████╗  ██║    ██╔════╝╚██╗ ██╔╝██╔════╝████╗ ████║██╔═══██╗████╗ "
+    echo "  ██╔██╗ ██║██║█████╔╝ ███████╗██║   ██║██╔██╗ ██║    ███████╗ ╚████╔╝ ███████╗██╔████╔██║██║   ██║██╔██╗"
+    echo "  ██║╚██╗██║██║██╔═██╗ ╚════██║██║   ██║██║╚██╗██║    ╚════██║  ╚██╔╝  ╚════██║██║╚██╔╝██║██║   ██║██║╚██"
+    echo "  ██║ ╚████║██║██║  ██╗███████║╚██████╔╝██║ ╚████║    ███████║   ██║   ███████║██║ ╚═╝ ██║╚██████╔╝██║ ╚█"
+    echo "  ╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  "
+    echo -e "${NC}"
+
+    # Subtitle bar
+    echo -e "${CYAN}${line}${NC}"
+    printf "${MAGENTA}${BOLD}  ⚡ LIVE SYSTEM MONITOR${NC}"
+    printf "${DIM}  │  Host: ${LCYAN}$(get_hostname)${NC}"
+    printf "${DIM}  │  Kernel: ${LCYAN}$(get_kernel)${NC}"
+    printf "${DIM}  │  IP: ${LCYAN}${ip_addr}${NC}"
+    printf "${DIM}  │  ${YELLOW}$(date '+%a %d %b  %H:%M:%S')${NC}\n"
+    echo -e "${CYAN}${line}${NC}"
+    echo ""
+
+    # ── SYSTEM STATS ────────────────────────────────────
+    echo -e "  ${LMAGENTA}${BOLD}● SYSTEM RESOURCES${NC}"
+    echo -e "  ${DIM}${thin}${NC}"
+    echo ""
+
+    # CPU
+    printf "  ${LCYAN}${BOLD}  CPU  ${NC}  "
+    draw_bar "$cpu_pct"
+    if [ "$temp" != "N/A" ]; then
+        if [ "$temp" -ge 80 ]; then
+            printf "  ${LRED}🌡 ${temp}°C ⚠${NC}"
+        elif [ "$temp" -ge 60 ]; then
+            printf "  ${YELLOW}🌡 ${temp}°C${NC}"
+        else
+            printf "  ${LGREEN}🌡 ${temp}°C${NC}"
+        fi
+    fi
+    echo ""
+    echo ""
+
+    # RAM
+    printf "  ${LCYAN}${BOLD}  RAM  ${NC}  "
+    draw_bar "$ram_pct"
+    printf "  ${DIM}%s MB ${NC}${DIM}/ %s MB${NC}\n" "$ram_used" "$ram_total"
+    echo ""
+
+    # Disk
+    printf "  ${LCYAN}${BOLD}  DSK  ${NC}  "
+    draw_bar "$disk_pct"
+    printf "  ${DIM}%s GB ${NC}${DIM}/ %s GB${NC}\n" "$disk_used" "$disk_total"
+    echo ""
+
+    # ── NETWORK ─────────────────────────────────────────
+    echo -e "  ${LMAGENTA}${BOLD}● NETWORK${NC}  ${DIM}[${net_iface}]${NC}"
+    echo -e "  ${DIM}${thin}${NC}"
+    echo ""
+    printf "  ${LGREEN}  ▼ DOWN  ${NC}${LCYAN}${BOLD}%-8s KB/s${NC}" "$net_rx"
+    printf "    ${LRED}  ▲ UP    ${NC}${LCYAN}${BOLD}%-8s KB/s${NC}\n" "$net_tx"
+    echo ""
+
+    # ── UPTIME ──────────────────────────────────────────
+    echo -e "  ${LMAGENTA}${BOLD}● UPTIME${NC}  ${LCYAN}${uptime_str}${NC}"
+    echo ""
+
+    # ── PROCESSES ───────────────────────────────────────
+    echo -e "${CYAN}${line}${NC}"
+    echo -e "  ${LMAGENTA}${BOLD}● TOP PROCESSES${NC}  ${DIM}sorted by CPU${NC}"
+    echo -e "${CYAN}${line}${NC}"
+    printf "  ${YELLOW}${BOLD}%-24s %7s %7s${NC}\n" "PROCESS" "CPU%" "MEM%"
+    echo -e "  ${DIM}$(printf '%*s' 42 | tr ' ' '─')${NC}"
+
+    local colors=("$LGREEN" "$GREEN" "$CYAN" "$LCYAN" "$MAGENTA" "$BLUE")
+    local i=0
+    while IFS= read -r proc; do
+        printf "  ${colors[$i]}%s${NC}\n" "$proc"
+        (( i = (i+1) % ${#colors[@]} ))
+    done < <(get_procs)
+
+    echo ""
+    echo -e "${CYAN}${line}${NC}"
+    echo -e "  ${DIM}Press ${NC}${YELLOW}${BOLD}q${NC}${DIM} to quit  │  ${NC}${YELLOW}${BOLD}r${NC}${DIM} to refresh  │  ${NC}${LGREEN}Auto-refresh: 2s${NC}  │  ${LCYAN}Nikson OS v1.0 Genesis${NC}"
+    echo -e "${CYAN}${line}${NC}"
+}
+
+trap 'tput cnorm; clear; echo -e "${LGREEN}[nikson-sysmon] Exited.${NC}"; exit 0' INT TERM
+tput civis
+
+while true; do
+    display
+    for i in 1 2 3 4; do
+        read -r -s -n1 -t0.5 key
+        if [ "$key" = "q" ] || [ "$key" = "Q" ]; then
+            tput cnorm; clear
+            echo -e "${LGREEN}[nikson-sysmon] Exited.${NC}"
+            exit 0
+        fi
+        [ "$key" = "r" ] || [ "$key" = "R" ] && break
+    done
+done

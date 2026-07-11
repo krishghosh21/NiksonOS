@@ -1,0 +1,6 @@
+#!/bin/bash
+# Auto MAC randomize on boot
+IFACE=$(ip route | awk '/default/{print $5; exit}')
+ip link set "$IFACE" down
+macchanger -r "$IFACE" &>/dev/null
+ip link set "$IFACE" up

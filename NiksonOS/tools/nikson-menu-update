@@ -1,0 +1,41 @@
+#!/bin/bash
+
+TOOLS=(
+    "nmap:X-NiksonInfoGathering"
+    "wireshark:X-NiksonInfoGathering"
+    "aircrack-ng:X-NiksonWireless"
+    "hashcat:X-NiksonPasswords"
+    "john:X-NiksonPasswords"
+    "sqlmap:X-NiksonWebApp"
+    "hydra:X-NiksonPasswords"
+    "nikto:X-NiksonWebApp"
+    "gobuster:X-NiksonWebApp"
+    "dirb:X-NiksonWebApp"
+    "tcpdump:X-NiksonInfoGathering"
+    "netcat:X-NiksonOther"
+    "binwalk:X-NiksonReverseEng"
+    "foremost:X-NiksonForensics"
+    "ghidra:X-NiksonReverseEng"
+    "burpsuite:X-NiksonWebApp"
+    "armitage:X-NiksonExploit"
+)
+
+for entry in "${TOOLS[@]}"; do
+    TOOL="${entry%%:*}"
+    CAT="${entry##*:}"
+    DESKTOP="/usr/share/applications/nikson-${TOOL}.desktop"
+
+    if command -v "$TOOL" &>/dev/null && [ ! -f "$DESKTOP" ]; then
+        cat > "$DESKTOP" << DESK
+[Desktop Entry]
+Name=$TOOL
+Exec=xfce4-terminal --title="$TOOL" -e "bash -c '$TOOL; bash'"
+Icon=security-high
+Type=Application
+Categories=$CAT;
+DESK
+    fi
+done
+
+update-desktop-database 2>/dev/null
+exit 0

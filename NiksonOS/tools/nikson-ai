@@ -1,0 +1,303 @@
+#!/bin/bash
+
+# ============================================================
+#   NIKSON-AI — AI Powered Terminal Assistant v1.0
+#   NiksonOS Custom Tool | Powered by Ollama
+# ============================================================
+
+RED='\033[0;31m'
+LRED='\033[1;31m'
+GREEN='\033[0;32m'
+LGREEN='\033[1;32m'
+CYAN='\033[0;36m'
+LCYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+MAGENTA='\033[0;35m'
+LMAGENTA='\033[1;35m'
+DIM='\033[2m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+HISTORY_FILE="$HOME/.nikson-ai-history"
+MODEL="llama3.2"
+OLLAMA_URL="http://localhost:11434"
+
+banner() {
+    clear
+    echo -e "${LCYAN}${BOLD}"
+    cat << 'EOF'
+  ███╗   ██╗██╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗       █████╗ ██╗
+  ████╗  ██║██║██║ ██╔╝██╔════╝██╔═══██╗████╗  ██║      ██╔══██╗██║
+  ██╔██╗ ██║██║█████╔╝ ███████╗██║   ██║██╔██╗ ██║      ███████║██║
+  ██║╚██╗██║██║██╔═██╗ ╚════██║██║   ██║██║╚██╗██║      ██╔══██║██║
+  ██║ ╚████║██║██║  ██╗███████║╚██████╔╝██║ ╚████║      ██║  ██║██║
+  ╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝     ╚═╝  ╚═╝╚═╝
+          AI Powered Pentesting Assistant — v1.0
+EOF
+    echo -e "${NC}"
+}
+
+check_ollama() {
+    if ! curl -s "$OLLAMA_URL/api/tags" &>/dev/null; then
+        echo -e "${RED}[✗] Ollama not running!${NC}"
+        echo -e "${YELLOW}[*] Install Ollama:${NC}"
+        echo -e "    curl https://ollama.ai/install.sh | sh"
+        echo -e "${YELLOW}[*] Start Ollama:${NC}"
+        echo -e "    ollama serve &"
+        echo -e "${YELLOW}[*] Pull model:${NC}"
+        echo -e "    ollama pull $MODEL"
+        echo ""
+        read -p "Start Ollama now? [y/N]: " START
+        if [[ "$START" =~ ^[Yy]$ ]]; then
+            ollama serve &>/dev/null &
+            sleep 3
+            if curl -s "$OLLAMA_URL/api/tags" &>/dev/null; then
+                echo -e "${LGREEN}[✓] Ollama started!${NC}"
+                return 0
+            else
+                echo -e "${RED}[✗] Failed to start Ollama${NC}"
+                exit 1
+            fi
+        else
+            exit 1
+        fi
+    fi
+    return 0
+}
+
+get_models() {
+    curl -s "$OLLAMA_URL/api/tags" 2>/dev/null | \
+        python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    models = [m['name'] for m in d.get('models', [])]
+    print('\n'.join(models))
+except:
+    print('llama3.2')
+" 2>/dev/null
+}
+
+select_model() {
+    echo -e "\n${CYAN}Available Models:${NC}"
+    local i=1
+    local MODELS=()
+    while IFS= read -r m; do
+        echo -e "  ${YELLOW}$i)${NC} $m"
+        MODELS+=("$m")
+        ((i++))
+    done < <(get_models)
+
+    echo ""
+    read -p "Select model [1-${#MODELS[@]}] (Enter for default): " MCHOICE
+    if [ -n "$MCHOICE" ] && [ "${MODELS[$((MCHOICE-1))]}" ]; then
+        MODEL="${MODELS[$((MCHOICE-1))]}"
+    fi
+    echo -e "${LGREEN}[✓] Using model: ${CYAN}$MODEL${NC}\n"
+}
+
+ask_ai() {
+    local PROMPT="$1"
+    local SYSTEM_PROMPT="You are Nikson AI, an expert cybersecurity and pentesting assistant integrated into Nikson OS — a custom ARM64 Linux security distribution. You help with:
+- Penetration testing techniques and methodology
+- Network scanning and enumeration (nmap, wireshark, etc.)
+- Web application security (SQLi, XSS, SSRF, etc.)
+- Password cracking and hash analysis
+- Reverse engineering and binary analysis
+- OSINT and reconnaissance
+- Linux system administration
+- Exploit development concepts
+- CTF challenges
+- Security tool usage
+
+Always provide practical, educational responses. Format code with proper syntax. Be concise but thorough. Never assist with illegal activities targeting systems without authorization."
+
+    local PAYLOAD=$(python3 -c "
+import json, sys
+prompt = sys.argv[1]
+system = sys.argv[2]
+model = sys.argv[3]
+data = {
+    'model': model,
+    'prompt': prompt,
+    'system': system,
+    'stream': True
+}
+print(json.dumps(data))
+" "$PROMPT" "$SYSTEM_PROMPT" "$MODEL" 2>/dev/null)
+
+    echo -e "\n${LCYAN}${BOLD}Nikson AI:${NC} "
+    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    curl -s -X POST "$OLLAMA_URL/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "$PAYLOAD" 2>/dev/null | \
+        python3 -c "
+import sys, json
+try:
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+            token = d.get('response', '')
+            if token:
+                print(token, end='', flush=True)
+            if d.get('done', False):
+                print()
+        except:
+            continue
+except KeyboardInterrupt:
+    print()
+" 2>/dev/null
+
+    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+}
+
+# Special commands
+handle_special() {
+    local INPUT="$1"
+    case "$INPUT" in
+        /help)
+            echo -e "\n${CYAN}${BOLD}Nikson AI Commands:${NC}"
+            echo -e "  ${YELLOW}/help${NC}        — Show this help"
+            echo -e "  ${YELLOW}/model${NC}       — Change AI model"
+            echo -e "  ${YELLOW}/clear${NC}       — Clear screen"
+            echo -e "  ${YELLOW}/history${NC}     — Show chat history"
+            echo -e "  ${YELLOW}/tools${NC}       — List Nikson OS tools"
+            echo -e "  ${YELLOW}/scan <ip>${NC}   — Quick nmap scan"
+            echo -e "  ${YELLOW}/hash <hash>${NC} — Identify hash type"
+            echo -e "  ${YELLOW}/encode <txt>${NC}— Base64 encode"
+            echo -e "  ${YELLOW}/decode <txt>${NC}— Base64 decode"
+            echo -e "  ${YELLOW}/ip${NC}          — Show my IP info"
+            echo -e "  ${YELLOW}/exit${NC}        — Quit Nikson AI\n"
+            return 0
+            ;;
+        /model)
+            select_model
+            return 0
+            ;;
+        /clear)
+            banner
+            return 0
+            ;;
+        /history)
+            if [ -f "$HISTORY_FILE" ]; then
+                echo -e "\n${CYAN}Chat History:${NC}"
+                cat "$HISTORY_FILE"
+            else
+                echo -e "${YELLOW}No history yet${NC}"
+            fi
+            return 0
+            ;;
+        /tools)
+            echo -e "\n${CYAN}${BOLD}Nikson OS Custom Tools:${NC}"
+            for tool in /usr/local/bin/nikson-*; do
+                name=$(basename "$tool")
+                echo -e "  ${LGREEN}✓${NC} $name"
+            done
+            echo ""
+            return 0
+            ;;
+        /ip)
+            echo -e "\n${CYAN}IP Information:${NC}"
+            curl -s "http://ip-api.com/json/" 2>/dev/null | \
+                python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(f'  Public IP : {d.get(\"query\",\"N/A\")}')
+print(f'  Country   : {d.get(\"country\",\"N/A\")}')
+print(f'  City      : {d.get(\"city\",\"N/A\")}')
+print(f'  ISP       : {d.get(\"isp\",\"N/A\")}')
+" 2>/dev/null
+            echo ""
+            return 0
+            ;;
+        /exit|/quit|exit|quit)
+            echo -e "${LGREEN}[nikson-ai] Goodbye! Stay ethical.${NC}"
+            exit 0
+            ;;
+    esac
+
+    # /scan command
+    if [[ "$INPUT" == /scan* ]]; then
+        TARGET="${INPUT#/scan }"
+        echo -e "\n${YELLOW}[*] Quick scanning: $TARGET${NC}"
+        nmap -sV --open -T4 "$TARGET" 2>/dev/null | \
+            grep -E "open|PORT|Nmap scan"
+        return 0
+    fi
+
+    # /hash command
+    if [[ "$INPUT" == /hash* ]]; then
+        HASH="${INPUT#/hash }"
+        LEN=${#HASH}
+        echo -e "\n${CYAN}Hash Analysis:${NC}"
+        echo -e "  Hash   : $HASH"
+        echo -e "  Length : $LEN chars"
+        case $LEN in
+            32)  echo -e "  Type   : ${LGREEN}MD5${NC}" ;;
+            40)  echo -e "  Type   : ${LGREEN}SHA1${NC}" ;;
+            56)  echo -e "  Type   : ${LGREEN}SHA224${NC}" ;;
+            64)  echo -e "  Type   : ${LGREEN}SHA256${NC}" ;;
+            96)  echo -e "  Type   : ${LGREEN}SHA384${NC}" ;;
+            128) echo -e "  Type   : ${LGREEN}SHA512${NC}" ;;
+            *)   echo -e "  Type   : ${YELLOW}Unknown${NC}" ;;
+        esac
+        echo ""
+        return 0
+    fi
+
+    # /encode command
+    if [[ "$INPUT" == /encode* ]]; then
+        TEXT="${INPUT#/encode }"
+        ENCODED=$(echo -n "$TEXT" | base64)
+        echo -e "\n  ${LGREEN}Encoded:${NC} $ENCODED\n"
+        return 0
+    fi
+
+    # /decode command
+    if [[ "$INPUT" == /decode* ]]; then
+        TEXT="${INPUT#/decode }"
+        DECODED=$(echo -n "$TEXT" | base64 -d 2>/dev/null)
+        echo -e "\n  ${LGREEN}Decoded:${NC} $DECODED\n"
+        return 0
+    fi
+
+    return 1
+}
+
+# ── MAIN ────────────────────────────────────────────────────
+banner
+check_ollama
+select_model
+
+local cols=$(tput cols)
+local line=$(printf '%*s' "$cols" | tr ' ' '═')
+echo -e "${CYAN}${line}${NC}"
+echo -e "  ${LMAGENTA}${BOLD}Nikson AI Ready!${NC}  ${DIM}Type your question or ${NC}${YELLOW}/help${NC}${DIM} for commands${NC}"
+echo -e "${CYAN}${line}${NC}\n"
+
+# Direct question mode
+if [ -n "$1" ]; then
+    ask_ai "$*"
+    exit 0
+fi
+
+# Interactive mode
+while true; do
+    echo -ne "${LGREEN}${BOLD}nikson@ai${NC}${DIM}:~#${NC} "
+    read -r INPUT
+
+    [ -z "$INPUT" ] && continue
+
+    # Save to history
+    echo "[$(date '+%H:%M')] $INPUT" >> "$HISTORY_FILE"
+
+    # Check special commands
+    handle_special "$INPUT" && continue
+
+    # Send to AI
+    ask_ai "$INPUT"
+done

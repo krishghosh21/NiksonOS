@@ -1,0 +1,759 @@
+#!/bin/bash
+
+# ============================================================
+#   NIKSON TOOL INSTALLER — v2.0 ULTIMATE
+#   300+ Kali Linux Security Tools
+# ============================================================
+
+# ─── Colors ───────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# ─── Tool Categories ──────────────────────────────────────
+
+declare -A INFO_TOOLS=(
+    ["nmap"]="Network port scanner & service detector"
+    ["wireshark"]="GUI packet analyzer"
+    ["tcpdump"]="CLI packet capture tool"
+    ["netdiscover"]="ARP network scanner"
+    ["masscan"]="Fast TCP port scanner"
+    ["arp-scan"]="ARP host discovery"
+    ["whois"]="Domain registration lookup"
+    ["dnsutils"]="DNS tools (dig, nslookup)"
+    ["dnsenum"]="DNS enumeration"
+    ["dnsrecon"]="DNS reconnaissance"
+    ["fierce"]="DNS brute forcer"
+    ["theharvester"]="Email & subdomain OSINT"
+    ["recon-ng"]="OSINT framework"
+    ["maltego"]="Visual link analysis"
+    ["dmitry"]="Deep Magic Information Gatherer"
+    ["nbtscan"]="NetBIOS scanner"
+    ["enum4linux"]="SMB/Windows enumeration"
+    ["smbclient"]="SMB client tool"
+    ["ldap-utils"]="LDAP query tools"
+    ["snmp"]="SNMP protocol tools"
+    ["snmpwalk"]="SNMP MIB walker"
+    ["smtp-user-enum"]="SMTP user enumeration"
+    ["sslyze"]="SSL/TLS analyzer"
+    ["sslscan"]="SSL/TLS scanner"
+    ["wafw00f"]="WAF fingerprinter"
+    ["whatweb"]="Web technology fingerprinter"
+    ["metagoofil"]="Document metadata extractor"
+    ["exiftool"]="File metadata reader"
+    ["unicornscan"]="Fast asynchronous network scanner"
+    ["onesixtyone"]="Fast SNMP scanner"
+    ["p0f"]="Passive OS fingerprinting"
+    ["xprobe2"]="Active OS fingerprinter"
+    ["amap"]="Application protocol detector"
+    ["netcat"]="Network Swiss Army knife"
+    ["socat"]="Advanced netcat"
+    ["fping"]="Parallel ping tool"
+    ["hping3"]="Packet crafting tool"
+    ["arping"]="ARP ping utility"
+    ["traceroute"]="Network path tracer"
+    ["mtr"]="Traceroute + ping combined"
+    ["lbd"]="Load balancer detector"
+    ["ike-scan"]="IPsec VPN scanner"
+    ["sslstrip"]="SSL stripping tool"
+    ["urlcrazy"]="Typosquatting domain checker"
+    ["sublist3r"]="Subdomain enumeration"
+    ["amass"]="Network mapping & OSINT"
+    ["spiderfoot"]="OSINT automation tool"
+    ["shodan"]="Shodan CLI search"
+)
+
+declare -A WEB_TOOLS=(
+    ["sqlmap"]="Automatic SQL injection"
+    ["nikto"]="Web server vulnerability scanner"
+    ["gobuster"]="Directory & DNS brute forcer"
+    ["dirb"]="Web content scanner"
+    ["dirbuster"]="GUI directory bruteforcer"
+    ["wfuzz"]="Web fuzzer"
+    ["ffuf"]="Fast web fuzzer"
+    ["burpsuite"]="Web proxy & security suite"
+    ["wpscan"]="WordPress vulnerability scanner"
+    ["joomscan"]="Joomla vulnerability scanner"
+    ["commix"]="Command injection exploiter"
+    ["xsser"]="XSS attack framework"
+    ["w3af"]="Web application attack framework"
+    ["skipfish"]="Web security recon"
+    ["arjun"]="HTTP parameter discovery"
+    ["dirsearch"]="Web path scanner"
+    ["cutycapt"]="Web screenshot tool"
+    ["httrack"]="Website copier"
+    ["webscarab"]="Web security testing proxy"
+    ["zaproxy"]="OWASP ZAP web scanner"
+    ["wapiti"]="Web vulnerability scanner"
+    ["padbuster"]="Automated padding oracle"
+    ["davtest"]="WebDAV tester"
+    ["cadaver"]="WebDAV client"
+    ["fimap"]="LFI/RFI vulnerability scanner"
+    ["uniscan"]="Web vulnerability scanner"
+    ["dotdotpwn"]="Directory traversal fuzzer"
+    ["grabber"]="Web vulnerability scanner"
+    ["golismero"]="Web security scanner"
+    ["vega"]="Web security scanner GUI"
+    ["websploit"]="Web exploitation framework"
+    ["htaccess-htpasswd-generator"]="htaccess generator"
+    ["jwtcracker"]="JWT token cracker"
+    ["beef-xss"]="Browser exploitation framework"
+    ["set"]="Social Engineering Toolkit"
+    ["maltego"]="Link analysis for web OSINT"
+    ["faraday"]="Vulnerability management"
+    ["dradis"]="Security collaboration tool"
+)
+
+declare -A PASS_TOOLS=(
+    ["hashcat"]="GPU-accelerated password cracker"
+    ["john"]="John the Ripper"
+    ["hydra"]="Network login brute forcer"
+    ["medusa"]="Parallel brute forcer"
+    ["crunch"]="Wordlist generator"
+    ["cewl"]="Custom wordlist from website"
+    ["wordlists"]="Common wordlist collection (rockyou etc)"
+    ["brutespray"]="Auto brute force services"
+    ["ncrack"]="Network authentication cracker"
+    ["ophcrack"]="Windows LM/NTLM cracker"
+    ["fcrackzip"]="ZIP password cracker"
+    ["pdfcrack"]="PDF password cracker"
+    ["rarcrack"]="RAR/ZIP/7z password cracker"
+    ["samdump2"]="Windows SAM database dumper"
+    ["chntpw"]="Windows password reset"
+    ["patator"]="Multi-purpose brute forcer"
+    ["rainbowcrack"]="Rainbow table cracker"
+    ["hashid"]="Hash type identifier"
+    ["hash-identifier"]="Identify hash types"
+    ["findmyhash"]="Online hash cracker"
+    ["pipal"]="Password analyzer"
+    ["pack"]="Password analysis & cracking kit"
+    ["rsmangler"]="Wordlist mangler"
+    ["mentalist"]="Wordlist generator GUI"
+    ["princeprocessor"]="PRINCE wordlist generator"
+    ["statsprocessor"]="Markov chain wordlist generator"
+    ["maskprocessor"]="Mask-based wordlist generator"
+    ["kwprocessor"]="Keyboard walk generator"
+    ["passwordmaker-cli"]="Password generator"
+)
+
+declare -A WIRELESS_TOOLS=(
+    ["aircrack-ng"]="WiFi WEP/WPA cracking suite"
+    ["kismet"]="Wireless network detector"
+    ["reaver"]="WPS PIN brute forcer"
+    ["wifite"]="Automated WiFi auditor"
+    ["bully"]="WPS brute force tool"
+    ["mdk4"]="WiFi stress testing tool"
+    ["hostapd"]="Software access point daemon"
+    ["hostapd-wpe"]="WPA enterprise attack"
+    ["bettercap"]="Network attack framework"
+    ["ettercap"]="MITM attack tool"
+    ["dsniff"]="Network sniffer suite"
+    ["macchanger"]="MAC address spoofer"
+    ["rfkill"]="RF device manager"
+    ["iw"]="WiFi configuration tool"
+    ["wireless-tools"]="Wireless network tools"
+    ["airgeddon"]="Wireless auditing script"
+    ["fern-wifi-cracker"]="GUI WiFi auditor"
+    ["wifiphisher"]="WiFi phishing tool"
+    ["eaphammer"]="WPA enterprise attacks"
+    ["pixiewps"]="WPS offline PIN cracker"
+    ["mfoc"]="MIFARE offline cracker"
+    ["mfcuk"]="MIFARE classic crack"
+    ["libnfc-dev"]="NFC library"
+    ["rfcat"]="RF analysis tool"
+    ["gnuradio"]="Software defined radio"
+    ["gqrx"]="SDR receiver"
+    ["ubertooth-tools"]="Bluetooth analysis"
+    ["blueman"]="Bluetooth manager"
+    ["bluesnarfer"]="Bluetooth data extractor"
+    ["btscanner"]="Bluetooth scanner"
+)
+
+declare -A EXPLOIT_TOOLS=(
+    ["metasploit-framework"]="The ultimate exploit framework"
+    ["exploitdb"]="Offline exploit database"
+    ["searchsploit"]="Exploit DB CLI search"
+    ["armitage"]="Metasploit GUI"
+    ["veil-framework"]="AV evasion framework"
+    ["shellter"]="Dynamic shellcode injector"
+    ["msfvenom"]="Payload generator (Metasploit)"
+    ["powersploit"]="PowerShell exploit scripts"
+    ["empire"]="PowerShell post-exploitation"
+    ["covenant"]="C2 framework"
+    ["routersploit"]="Router exploit framework"
+    ["autopwn2"]="Automated network exploit"
+    ["eternalblue-doublepulsar"]="MS17-010 exploit"
+    ["ms17-010"]="EternalBlue scanner/exploit"
+    ["impacket-scripts"]="Network protocol exploitation"
+    ["crackmapexec"]="Network pivoting toolkit"
+    ["responder"]="LLMNR/NBT-NS/mDNS poisoner"
+    ["mitm6"]="IPv6 MITM attack"
+    ["bloodhound"]="AD attack path mapper"
+    ["sharphound"]="BloodHound data collector"
+    ["kerbrute"]="Kerberos brute forcer"
+    ["mimikatz"]="Windows credentials dumper"
+    ["rubeus"]="Kerberos attack toolkit"
+)
+
+declare -A REVERSE_TOOLS=(
+    ["ghidra"]="NSA reverse engineering suite"
+    ["radare2"]="CLI RE framework"
+    ["r2ghidra"]="Radare2 Ghidra plugin"
+    ["binwalk"]="Firmware analysis tool"
+    ["gdb"]="GNU debugger"
+    ["gdb-peda"]="GDB exploit development"
+    ["ltrace"]="Library call tracer"
+    ["strace"]="System call tracer"
+    ["valgrind"]="Memory analysis"
+    ["strings"]="Extract printable strings"
+    ["objdump"]="Binary disassembler"
+    ["hexedit"]="Terminal hex editor"
+    ["xxd"]="Hex dump tool"
+    ["file"]="File type identifier"
+    ["apktool"]="Android APK reverse engineer"
+    ["jadx"]="Android DEX decompiler"
+    ["dex2jar"]="DEX to JAR converter"
+    ["bytecode-viewer"]="Java/Android bytecode viewer"
+    ["jd-gui"]="Java decompiler GUI"
+    ["cfr"]="Java decompiler"
+    ["procyon"]="Java decompiler"
+    ["pwndbg"]="GDB plugin for exploit dev"
+    ["pwntools"]="CTF exploit development"
+    ["ROPgadget"]="ROP chain finder"
+    ["ropper"]="ROP gadget finder"
+    ["checksec"]="Binary security checker"
+    ["retdec"]="Retargetable decompiler"
+    ["angr"]="Binary analysis framework"
+    ["frida-tools"]="Dynamic instrumentation"
+    ["rizin"]="Modern radare2 fork"
+    ["cutter"]="GUI for radare2/rizin"
+)
+
+declare -A FORENSICS_TOOLS=(
+    ["volatility3"]="Memory forensics framework"
+    ["foremost"]="File carving by header/footer"
+    ["autopsy"]="Digital forensics GUI"
+    ["sleuthkit"]="CLI forensic toolkit"
+    ["dcfldd"]="Enhanced forensic dd"
+    ["testdisk"]="Partition & boot repair"
+    ["photorec"]="Multi-format file recovery"
+    ["bulk-extractor"]="Forensic feature extractor"
+    ["scalpel"]="File carver"
+    ["exiv2"]="Image metadata tool"
+    ["steghide"]="Steganography hide/extract"
+    ["stegosuite"]="Steganography GUI"
+    ["outguess"]="Universal steganography"
+    ["stegcracker"]="Steganography brute forcer"
+    ["zsteg"]="PNG/BMP steganography"
+    ["pngcheck"]="PNG file validator"
+    ["guymager"]="Forensic disk imager GUI"
+    ["air"]="Automated image restore"
+    ["afftools"]="Advanced forensic format tools"
+    ["ewf-tools"]="Expert Witness Format tools"
+    ["rkhunter"]="Rootkit hunter"
+    ["chkrootkit"]="Rootkit checker"
+    ["lynis"]="Security audit tool"
+    ["ossec"]="Host intrusion detection"
+    ["aide"]="File integrity checker"
+    ["tripwire"]="File integrity monitor"
+    ["unhide"]="Find hidden processes"
+    ["tiger"]="Security audit & IDS"
+    ["yara"]="Malware pattern matcher"
+    ["clamav"]="Open source antivirus"
+    ["pdf-parser"]="PDF structure analyzer"
+    ["peepdf"]="PDF analysis tool"
+    ["pdfid"]="PDF identifier"
+    ["oletools"]="MS Office malware analysis"
+    ["virustotal-cli"]="VirusTotal API CLI"
+    ["networkminer"]="Network forensic analyzer"
+)
+
+declare -A SNIFF_TOOLS=(
+    ["wireshark"]="GUI packet analyzer"
+    ["tshark"]="CLI Wireshark"
+    ["tcpdump"]="Packet capture"
+    ["bettercap"]="MITM framework"
+    ["ettercap"]="MITM suite"
+    ["responder"]="NBT-NS/LLMNR poisoner"
+    ["iftop"]="Network bandwidth monitor"
+    ["nethogs"]="Per-process bandwidth"
+    ["darkstat"]="Network statistics daemon"
+    ["driftnet"]="Capture images from traffic"
+    ["tcpflow"]="TCP stream extractor"
+    ["tcpreplay"]="Replay pcap files"
+    ["tcptrack"]="TCP connection tracker"
+    ["ngrep"]="Network grep"
+    ["dsniff"]="Password sniffer suite"
+    ["urlsnarf"]="URL sniffer"
+    ["mailsnarf"]="Email sniffer"
+    ["msgsnarf"]="Chat message sniffer"
+    ["arpwatch"]="ARP activity monitor"
+    ["p0f"]="Passive fingerprinter"
+    ["netsniff-ng"]="High-performance sniffer"
+    ["chaosreader"]="TCP session reconstructor"
+    ["xplico"]="Network forensics tool"
+    ["networkanalyzer"]="Android/Linux analyzer"
+    ["sslstrip"]="HTTPS downgrade attack"
+    ["mitmproxy"]="Interactive MITM proxy"
+    ["sslsplit"]="Transparent SSL proxy"
+)
+
+declare -A VULN_TOOLS=(
+    ["openvas"]="Open vulnerability scanner"
+    ["nessus"]="Professional vulnerability scanner"
+    ["lynis"]="Unix security auditor"
+    ["nikto"]="Web server scanner"
+    ["nmap"]="NSE vulnerability scripts"
+    ["vuls"]="Go-based vulnerability scanner"
+    ["nexpose"]="Rapid7 vulnerability scanner"
+    ["wazuh"]="SIEM & vulnerability manager"
+    ["grype"]="Container vulnerability scanner"
+    ["trivy"]="Container security scanner"
+    ["clair"]="Container vulnerability scanner"
+    ["anchore"]="Container policy enforcement"
+    ["bandit"]="Python security linter"
+    ["semgrep"]="Static analysis multi-lang"
+    ["sonarqube"]="Code quality & security"
+    ["retire.js"]="JS vulnerable library scanner"
+    ["snyk"]="Dependency vulnerability finder"
+    ["owasp-dependency-check"]="Java dependency check"
+    ["safety"]="Python package auditor"
+    ["bundler-audit"]="Ruby gem auditor"
+)
+
+declare -A SOCIAL_TOOLS=(
+    ["set"]="Social Engineering Toolkit"
+    ["gophish"]="Phishing simulation framework"
+    ["evilginx2"]="Advanced phishing proxy"
+    ["modlishka"]="Phishing reverse proxy"
+    ["king-phisher"]="Phishing campaign tool"
+    ["zphisher"]="30+ phishing templates"
+    ["shellphish"]="Phishing tool"
+    ["blackeye"]="Multi-site phishing"
+    ["socialfish"]="Social media phishing"
+    ["credmaster"]="Credential stuffing tool"
+    ["trufflesecurity"]="Secret finder in git"
+    ["gitdumper"]="Git repository dumper"
+    ["gitrob"]="GitHub sensitive files"
+    ["gitleaks"]="Git secret scanner"
+    ["trufflesniffer"]="Git history scanner"
+    ["maltego"]="Social network OSINT"
+    ["creepy"]="Geolocation OSINT"
+    ["tinfoleak"]="Twitter intelligence"
+    ["sherlock"]="Username OSINT hunter"
+    ["socialscan"]="Username/email checker"
+    ["holehe"]="Email site registrations"
+    ["nexfil"]="Username finder"
+    ["phoneinfoga"]="Phone number OSINT"
+    ["twint"]="Twitter scraper"
+    ["instaloader"]="Instagram downloader"
+    ["osrframework"]="OSINT framework"
+)
+
+declare -A STRESSER_TOOLS=(
+    ["hping3"]="Packet crafting & DoS test"
+    ["mdk4"]="WiFi DoS testing"
+    ["t50"]="Network stress tool"
+    ["siege"]="HTTP load tester"
+    ["ab"]="Apache bench stress test"
+    ["slowhttptest"]="Slow HTTP DoS tester"
+    ["goldeneye"]="HTTP DoS test tool"
+    ["wrk"]="Modern HTTP benchmark"
+    ["locust"]="Distributed load tester"
+    ["jmeter"]="Java load test tool"
+    ["nping"]="Network packet generator"
+    ["scapy"]="Packet manipulation"
+    ["ostinato"]="Packet crafter & generator"
+)
+
+declare -A PRIVESC_TOOLS=(
+    ["linux-exploit-suggester"]="Linux privilege escalation suggestor"
+    ["linux-smart-enumeration"]="Linux enumeration for privesc"
+    ["linenum"]="Linux enumeration script"
+    ["pspy"]="Monitor Linux processes"
+    ["sudo-killer"]="Sudo misconfiguration finder"
+    ["suid3num"]="SUID binary finder"
+    ["gtfobins"]="GTFOBins reference"
+    ["winpeas"]="Windows privesc checker"
+    ["linpeas"]="Linux privesc checker"
+    ["wesng"]="Windows exploit suggester NG"
+    ["powerup"]="PowerShell privesc"
+    ["jaws"]="Windows auto enum script"
+    ["sessiongopher"]="Session/credential extractor"
+    ["lazagne"]="Credential recovery tool"
+    ["mimikatz"]="Windows credential dumper"
+    ["incognito"]="Token impersonation tool"
+    ["juicypotato"]="Windows token privesc"
+    ["printspoofer"]="Windows spoofer privesc"
+    ["chisel"]="TCP/UDP tunnel over HTTP"
+    ["plink"]="Putty link for tunneling"
+)
+
+declare -A CONTAINER_TOOLS=(
+    ["docker"]="Container platform"
+    ["docker-compose"]="Multi-container orchestrator"
+    ["trivy"]="Container vulnerability scanner"
+    ["grype"]="Container & filesystem scanner"
+    ["dive"]="Docker image explorer"
+    ["clair"]="Container static analysis"
+    ["anchore-cli"]="Container policy CLI"
+    ["falco"]="Container runtime security"
+    ["kubeaudit"]="Kubernetes security audit"
+    ["kube-bench"]="Kubernetes CIS benchmark"
+    ["kube-hunter"]="Kubernetes penetration test"
+    ["kubectl"]="Kubernetes CLI"
+    ["helm"]="Kubernetes package manager"
+    ["sysdig"]="Container visibility tool"
+    ["tracee"]="eBPF runtime security"
+    ["tetragon"]="eBPF security observability"
+)
+
+declare -A CRYPTO_TOOLS=(
+    ["openssl"]="Crypto & PKI Swiss knife"
+    ["gpg"]="GNU Privacy Guard"
+    ["ccrypt"]="File encryption tool"
+    ["bcrypt"]="Blowfish encryption tool"
+    ["hashdeep"]="Recursive hash tool"
+    ["md5deep"]="MD5 hash recursive"
+    ["sha256deep"]="SHA256 hash tool"
+    ["ssdeep"]="Fuzzy hashing tool"
+    ["afftools"]="AFF forensics format"
+    ["dc3dd"]="DoD forensic dd"
+    ["ewfacquire"]="E01 forensic acquisition"
+    ["cryptcat"]="Encrypted netcat"
+    ["stunnel4"]="SSL tunnel daemon"
+    ["tor"]="Onion routing anonymizer"
+    ["proxychains4"]="TCP proxy tool"
+    ["anonsurf"]="System-wide anonymizer"
+    ["macchanger"]="MAC address randomizer"
+    ["bleachbit"]="Privacy cleaner"
+)
+
+# ─── Helper Functions ──────────────────────────────────────
+
+print_banner() {
+    clear
+    echo -e "${CYAN}"
+    cat << 'BANNER'
+███╗   ██╗██╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗
+████╗  ██║██║██║ ██╔╝██╔════╝██╔═══██╗████╗  ██║
+██╔██╗ ██║██║█████╔╝ ███████╗██║   ██║██╔██╗ ██║
+██║╚██╗██║██║██╔═██╗ ╚════██║██║   ██║██║╚██╗██║
+██║ ╚████║██║██║  ██╗███████║╚██████╔╝██║ ╚████║
+╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝
+BANNER
+    echo -e "${YELLOW}        Tool Installer — v2.0 ULTIMATE  |  300+ Tools${NC}"
+    echo -e "${DIM}       https://www.hackerseye.in/ | JOIN US FOR MORE${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
+count_installed() {
+    local -n MAP=$1
+    local count=0
+    for tool in "${!MAP[@]}"; do
+        command -v "$tool" &>/dev/null && ((count++))
+    done
+    echo $count
+}
+
+print_menu_item() {
+    local num="$1"
+    local label="$2"
+    local count="$3"
+    local installed="$4"
+    printf "  ${YELLOW}%2s)${NC} %-28s ${DIM}(%s tools, ${GREEN}%s installed${DIM})${NC}\n" \
+        "$num" "$label" "$count" "$installed"
+}
+
+select_tools() {
+    local -n TOOL_MAP=$1
+    local CAT_NAME=$2
+    local SELECTED=()
+
+    while true; do
+        clear
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${BOLD}${WHITE}$CAT_NAME${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+
+        local i=1
+        local TOOL_NAMES=()
+
+        for tool in "${!TOOL_MAP[@]}"; do
+            TOOL_NAMES+=("$tool")
+            local status=""
+            local color="${NC}"
+            if command -v "$tool" &>/dev/null; then
+                status=" ${GREEN}[✓ installed]${NC}"
+            fi
+            printf "  ${YELLOW}%3d)${NC} ${CYAN}%-30s${NC} ${DIM}%s${NC}%b\n" \
+                "$i" "$tool" "${TOOL_MAP[$tool]}" "$status"
+            ((i++))
+        done
+
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${YELLOW}  a)${NC} Install ALL tools in this category"
+        echo -e "  ${YELLOW}  s)${NC} Install only NOT installed tools"
+        echo -e "  ${YELLOW}  b)${NC} Back to main menu"
+        echo ""
+        echo -e "  ${DIM}Enter numbers separated by spaces: e.g.  1 3 7 12${NC}"
+        echo ""
+        read -p "  Choice: " INPUT
+
+        case "$INPUT" in
+            b|B|q|Q) return ;;
+            a|A) SELECTED=("${TOOL_NAMES[@]}") ;;
+            s|S)
+                for tool in "${TOOL_NAMES[@]}"; do
+                    command -v "$tool" &>/dev/null || SELECTED+=("$tool")
+                done
+                ;;
+            *)
+                for num in $INPUT; do
+                    if [[ "$num" =~ ^[0-9]+$ ]]; then
+                        idx=$((num-1))
+                        [ -n "${TOOL_NAMES[$idx]}" ] && SELECTED+=("${TOOL_NAMES[$idx]}")
+                    fi
+                done
+                ;;
+        esac
+
+        if [ ${#SELECTED[@]} -eq 0 ]; then
+            echo -e "\n  ${RED}No tools selected!${NC}"
+            sleep 1
+            continue
+        fi
+
+        # Confirm
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${WHITE}Selected tools (${#SELECTED[@]}):${NC}"
+        for t in "${SELECTED[@]}"; do
+            echo -e "  ${DIM}→${NC} $t"
+        done
+        echo ""
+        read -p "  Proceed with installation? [Y/n]: " CONFIRM
+        [[ "$CONFIRM" =~ ^[Nn]$ ]] && SELECTED=() && continue
+
+        # Install
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${CYAN}Updating apt cache...${NC}"
+        sudo apt update -qq 2>/dev/null
+        echo ""
+
+        SUCCESS=0; FAILED=0; SKIP=0
+
+        for tool in "${SELECTED[@]}"; do
+            if command -v "$tool" &>/dev/null; then
+                printf "  ${DIM}%-35s${NC} ${YELLOW}[already installed]${NC}\n" "$tool"
+                ((SKIP++))
+                continue
+            fi
+            printf "  ${CYAN}Installing %-28s${NC} " "$tool..."
+            if sudo apt install -y "$tool" &>/dev/null 2>&1; then
+                echo -e "${GREEN}[✓ done]${NC}"
+                ((SUCCESS++))
+            else
+                # Try pip for Python tools
+                if pip3 install "$tool" &>/dev/null 2>&1; then
+                    echo -e "${GREEN}[✓ pip]${NC}"
+                    ((SUCCESS++))
+                else
+                    echo -e "${RED}[✗ failed]${NC}"
+                    ((FAILED++))
+                fi
+            fi
+        done
+
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${GREEN}✓ Installed : $SUCCESS${NC}"
+        echo -e "  ${YELLOW}⊘ Skipped   : $SKIP (already present)${NC}"
+        [ $FAILED -gt 0 ] && echo -e "  ${RED}✗ Failed    : $FAILED${NC}"
+        echo ""
+        read -p "  Press Enter to continue..."
+        SELECTED=()
+    done
+}
+
+install_all_tools() {
+    echo ""
+    echo -e "${RED}${BOLD}  ⚠  WARNING: This will attempt to install ALL 300+ tools!${NC}"
+    echo -e "${DIM}  This may take 30-60+ minutes and require several GB of disk space.${NC}"
+    echo ""
+    read -p "  Are you sure? Type YES to confirm: " CONFIRM
+    [[ "$CONFIRM" != "YES" ]] && echo -e "\n  ${YELLOW}Aborted.${NC}" && sleep 1 && return
+
+    echo -e "\n  ${CYAN}Updating apt cache...${NC}"
+    sudo apt update -qq 2>/dev/null
+
+    local ALL_SUCCESS=0 ALL_FAILED=0
+
+    local ALL_MAPS=(
+        INFO_TOOLS WEB_TOOLS PASS_TOOLS WIRELESS_TOOLS
+        EXPLOIT_TOOLS REVERSE_TOOLS FORENSICS_TOOLS SNIFF_TOOLS
+        VULN_TOOLS SOCIAL_TOOLS STRESSER_TOOLS PRIVESC_TOOLS
+        CONTAINER_TOOLS CRYPTO_TOOLS
+    )
+
+    for MAP_NAME in "${ALL_MAPS[@]}"; do
+        local -n TMAP=$MAP_NAME
+        echo ""
+        echo -e "  ${YELLOW}─── $MAP_NAME ───${NC}"
+        for tool in "${!TMAP[@]}"; do
+            if command -v "$tool" &>/dev/null; then
+                printf "  ${DIM}%-35s [already installed]${NC}\n" "$tool"
+                continue
+            fi
+            printf "  ${CYAN}%-35s${NC} " "$tool"
+            if sudo apt install -y "$tool" &>/dev/null 2>&1; then
+                echo -e "${GREEN}[✓]${NC}"
+                ((ALL_SUCCESS++))
+            else
+                echo -e "${RED}[✗]${NC}"
+                ((ALL_FAILED++))
+            fi
+        done
+    done
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${GREEN}Total Installed : $ALL_SUCCESS${NC}"
+    echo -e "  ${RED}Total Failed    : $ALL_FAILED${NC}"
+    echo ""
+    read -p "  Press Enter..."
+}
+
+search_tool() {
+    echo ""
+    read -p "  Search tool name: " QUERY
+    QUERY=$(echo "$QUERY" | tr '[:upper:]' '[:lower:]')
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${WHITE}Results for: \"$QUERY\"${NC}"
+    echo ""
+
+    local found=0
+    local ALL_MAPS=(
+        INFO_TOOLS WEB_TOOLS PASS_TOOLS WIRELESS_TOOLS
+        EXPLOIT_TOOLS REVERSE_TOOLS FORENSICS_TOOLS SNIFF_TOOLS
+        VULN_TOOLS SOCIAL_TOOLS STRESSER_TOOLS PRIVESC_TOOLS
+        CONTAINER_TOOLS CRYPTO_TOOLS
+    )
+
+    for MAP_NAME in "${ALL_MAPS[@]}"; do
+        local -n TMAP=$MAP_NAME
+        for tool in "${!TMAP[@]}"; do
+            local tool_lower=$(echo "$tool" | tr '[:upper:]' '[:lower:]')
+            local desc_lower=$(echo "${TMAP[$tool]}" | tr '[:upper:]' '[:lower:]')
+            if [[ "$tool_lower" == *"$QUERY"* || "$desc_lower" == *"$QUERY"* ]]; then
+                local status="${RED}[not installed]${NC}"
+                command -v "$tool" &>/dev/null && status="${GREEN}[installed]${NC}"
+                printf "  ${CYAN}%-30s${NC} ${DIM}%-40s${NC} %b\n" \
+                    "$tool" "${TMAP[$tool]}" "$status"
+                ((found++))
+            fi
+        done
+    done
+
+    [ $found -eq 0 ] && echo -e "  ${RED}No results found.${NC}"
+    echo ""
+    read -p "  Press Enter..."
+}
+
+system_info() {
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${WHITE}System Information${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${YELLOW}OS:${NC}      $(uname -o) $(uname -m)"
+    echo -e "  ${YELLOW}Kernel:${NC}  $(uname -r)"
+    echo -e "  ${YELLOW}Host:${NC}    $(hostname)"
+    echo -e "  ${YELLOW}Disk:${NC}    $(df -h / | awk 'NR==2{print $4" free of "$2}')"
+    echo -e "  ${YELLOW}RAM:${NC}     $(free -h | awk '/^Mem/{print $7" free of "$2}')"
+    echo ""
+    echo -e "  ${YELLOW}Total tools in installer: ${GREEN}300+${NC}"
+
+    local total_installed=0
+    local ALL_MAPS=(
+        INFO_TOOLS WEB_TOOLS PASS_TOOLS WIRELESS_TOOLS
+        EXPLOIT_TOOLS REVERSE_TOOLS FORENSICS_TOOLS SNIFF_TOOLS
+        VULN_TOOLS SOCIAL_TOOLS STRESSER_TOOLS PRIVESC_TOOLS
+        CONTAINER_TOOLS CRYPTO_TOOLS
+    )
+    for MAP_NAME in "${ALL_MAPS[@]}"; do
+        local -n TMAP=$MAP_NAME
+        for tool in "${!TMAP[@]}"; do
+            command -v "$tool" &>/dev/null && ((total_installed++))
+        done
+    done
+
+    echo -e "  ${YELLOW}Tools currently installed: ${GREEN}$total_installed${NC}"
+    echo ""
+    read -p "  Press Enter..."
+}
+
+# ─── Main Menu Loop ────────────────────────────────────────
+
+while true; do
+    print_banner
+
+    print_menu_item  1 "Information Gathering"    "${#INFO_TOOLS[@]}"     "$(count_installed INFO_TOOLS)"
+    print_menu_item  2 "Web Application"          "${#WEB_TOOLS[@]}"      "$(count_installed WEB_TOOLS)"
+    print_menu_item  3 "Password Attacks"         "${#PASS_TOOLS[@]}"     "$(count_installed PASS_TOOLS)"
+    print_menu_item  4 "Wireless Attacks"         "${#WIRELESS_TOOLS[@]}" "$(count_installed WIRELESS_TOOLS)"
+    print_menu_item  5 "Exploitation"             "${#EXPLOIT_TOOLS[@]}"  "$(count_installed EXPLOIT_TOOLS)"
+    print_menu_item  6 "Reverse Engineering"      "${#REVERSE_TOOLS[@]}"  "$(count_installed REVERSE_TOOLS)"
+    print_menu_item  7 "Forensics & Stego"        "${#FORENSICS_TOOLS[@]}" "$(count_installed FORENSICS_TOOLS)"
+    print_menu_item  8 "Sniffing & Spoofing"      "${#SNIFF_TOOLS[@]}"    "$(count_installed SNIFF_TOOLS)"
+    print_menu_item  9 "Vulnerability Analysis"   "${#VULN_TOOLS[@]}"     "$(count_installed VULN_TOOLS)"
+    print_menu_item 10 "Social Engineering"       "${#SOCIAL_TOOLS[@]}"   "$(count_installed SOCIAL_TOOLS)"
+    print_menu_item 11 "Stress Testing"           "${#STRESSER_TOOLS[@]}" "$(count_installed STRESSER_TOOLS)"
+    print_menu_item 12 "Privilege Escalation"     "${#PRIVESC_TOOLS[@]}"  "$(count_installed PRIVESC_TOOLS)"
+    print_menu_item 13 "Container Security"       "${#CONTAINER_TOOLS[@]}" "$(count_installed CONTAINER_TOOLS)"
+    print_menu_item 14 "Crypto & Anonymity"       "${#CRYPTO_TOOLS[@]}"   "$(count_installed CRYPTO_TOOLS)"
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${YELLOW}  A)${NC} Install ALL 300+ tools at once"
+    echo -e "  ${YELLOW}  /)${NC} Search a tool by name or keyword"
+    echo -e "  ${YELLOW}  i)${NC} System & install stats"
+    echo -e "  ${YELLOW}  q)${NC} Quit"
+    echo ""
+    read -p "  Category: " CAT
+
+    case $CAT in
+        1)  select_tools INFO_TOOLS     "Information Gathering" ;;
+        2)  select_tools WEB_TOOLS      "Web Application" ;;
+        3)  select_tools PASS_TOOLS     "Password Attacks" ;;
+        4)  select_tools WIRELESS_TOOLS "Wireless Attacks" ;;
+        5)  select_tools EXPLOIT_TOOLS  "Exploitation" ;;
+        6)  select_tools REVERSE_TOOLS  "Reverse Engineering" ;;
+        7)  select_tools FORENSICS_TOOLS "Forensics & Stego" ;;
+        8)  select_tools SNIFF_TOOLS    "Sniffing & Spoofing" ;;
+        9)  select_tools VULN_TOOLS     "Vulnerability Analysis" ;;
+        10) select_tools SOCIAL_TOOLS   "Social Engineering" ;;
+        11) select_tools STRESSER_TOOLS "Stress Testing" ;;
+        12) select_tools PRIVESC_TOOLS  "Privilege Escalation" ;;
+        13) select_tools CONTAINER_TOOLS "Container Security" ;;
+        14) select_tools CRYPTO_TOOLS   "Crypto & Anonymity" ;;
+        A|a) install_all_tools ;;
+        /|s|S) search_tool ;;
+        i|I) system_info ;;
+        q|Q) echo -e "\n  ${CYAN}Goodbye! Happy hacking (ethically)!${NC}\n"; exit 0 ;;
+        *) echo -e "\n  ${RED}Invalid choice!${NC}"; sleep 0.8 ;;
+    esac
+done

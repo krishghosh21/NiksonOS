@@ -1,0 +1,506 @@
+#!/bin/bash
+
+# ============================================================
+#   NIKSON-VAULT — Encrypted Password Manager v1.0
+#   NiksonOS Custom Tool — FIXED VERSION
+# ============================================================
+
+RED='\033[0;31m'
+LRED='\033[1;31m'
+GREEN='\033[0;32m'
+LGREEN='\033[1;32m'
+CYAN='\033[0;36m'
+LCYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+VAULT_DIR="$HOME/.nikson-vault"
+VAULT_FILE="$VAULT_DIR/vault.enc"
+SALT_FILE="$VAULT_DIR/.salt"
+CLIP_TIMEOUT=30
+
+banner() {
+    clear
+    echo -e "${LGREEN}${BOLD}"
+    cat << 'BANNER'
+  ██╗   ██╗ █████╗ ██╗   ██╗██╗  ████████╗
+  ██║   ██║██╔══██╗██║   ██║██║  ╚══██╔══╝
+  ██║   ██║███████║██║   ██║██║     ██║
+  ╚██╗ ██╔╝██╔══██║██║   ██║██║     ██║
+   ╚████╔╝ ██║  ██║╚██████╔╝███████╗██║
+    ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝
+  NIKSON OS — Encrypted Password Manager v1.0
+BANNER
+    echo -e "${NC}"
+}
+
+ok()   { echo -e "  ${LGREEN}[✓]${NC} $1"; }
+fail() { echo -e "  ${RED}[✗]${NC} $1"; }
+info() { echo -e "  ${LCYAN}[i]${NC} $1"; }
+warn() { echo -e "  ${YELLOW}[!]${NC} $1"; }
+
+section() {
+    local cols
+    cols=$(tput cols)
+    local line
+    line=$(printf '%*s' "$cols" | tr ' ' '─')
+    echo -e "\n${CYAN}${line}${NC}"
+    echo -e "  ${LGREEN}${BOLD}▶ $1${NC}"
+    echo -e "${CYAN}${line}${NC}\n"
+}
+
+# ── Check dependencies ─────────────────────────────────────
+check_deps() {
+    if ! command -v openssl &>/dev/null; then
+        fail "openssl required: sudo apt install openssl"
+        exit 1
+    fi
+}
+
+# ── Generate salt ──────────────────────────────────────────
+init_vault() {
+    mkdir -p "$VAULT_DIR"
+    chmod 700 "$VAULT_DIR"
+    if [ ! -f "$SALT_FILE" ]; then
+        openssl rand -hex 32 > "$SALT_FILE"
+        chmod 600 "$SALT_FILE"
+    fi
+}
+
+# ── Derive key from master password ───────────────────────
+# FIX: tr -d '\n' se salt ki trailing newline hatao
+derive_key() {
+    local PASS="$1"
+    local SALT
+    SALT=$(tr -d '\n' < "$SALT_FILE")
+    echo -n "${PASS}${SALT}" | sha256sum | cut -d' ' -f1
+}
+
+# ── Encrypt data ───────────────────────────────────────────
+encrypt_data() {
+    local DATA="$1"
+    local KEY="$2"
+    echo "$DATA" | openssl enc -aes-256-cbc \
+        -pbkdf2 -iter 100000 \
+        -pass pass:"$KEY" \
+        -base64 2>/dev/null
+}
+
+# ── Decrypt data ───────────────────────────────────────────
+decrypt_data() {
+    local FILE="$1"
+    local KEY="$2"
+    openssl enc -d -aes-256-cbc \
+        -pbkdf2 -iter 100000 \
+        -pass pass:"$KEY" \
+        -base64 -in "$FILE" 2>/dev/null
+}
+
+# ── Master password prompt ─────────────────────────────────
+get_master() {
+    echo -ne "  ${YELLOW}${BOLD}Master Password: ${NC}"
+    read -r -s MASTER < /dev/tty
+    echo ""
+    derive_key "$MASTER"
+}
+
+# ── Verify master password ─────────────────────────────────
+# FIX: $? ko decrypt ke turant baad save karo
+verify_master() {
+    local KEY="$1"
+    if [ ! -f "$VAULT_FILE" ]; then
+        return 0
+    fi
+    local TEST
+    TEST=$(decrypt_data "$VAULT_FILE" "$KEY" 2>/dev/null)
+    local STATUS=$?
+    if [ $STATUS -eq 0 ] && echo "$TEST" | grep -q "NIKSON_VAULT"; then
+        return 0
+    fi
+    return 1
+}
+
+# ── Load vault ─────────────────────────────────────────────
+load_vault() {
+    local KEY="$1"
+    if [ ! -f "$VAULT_FILE" ]; then
+        echo "NIKSON_VAULT_V1"
+        return
+    fi
+    decrypt_data "$VAULT_FILE" "$KEY" 2>/dev/null
+}
+
+# ── Save vault ─────────────────────────────────────────────
+save_vault() {
+    local DATA="$1"
+    local KEY="$2"
+    local TMPFILE
+    TMPFILE=$(mktemp)
+    encrypt_data "$DATA" "$KEY" > "$TMPFILE"
+    mv "$TMPFILE" "$VAULT_FILE"
+    chmod 600 "$VAULT_FILE"
+}
+
+# ── Generate password ──────────────────────────────────────
+gen_password() {
+    local LEN="${1:-16}"
+    local MODE="${2:-all}"
+    case "$MODE" in
+        alpha)  cat /dev/urandom | tr -dc 'a-zA-Z' | head -c "$LEN" ;;
+        num)    cat /dev/urandom | tr -dc '0-9' | head -c "$LEN" ;;
+        simple) cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c "$LEN" ;;
+        *)      cat /dev/urandom | tr -dc 'a-zA-Z0-9!@#$%^&*()_+-=' | head -c "$LEN" ;;
+    esac
+    echo ""
+}
+
+# ── Copy to clipboard ──────────────────────────────────────
+copy_clip() {
+    local TEXT="$1"
+    if command -v xclip &>/dev/null; then
+        echo -n "$TEXT" | xclip -selection clipboard
+        ok "Copied to clipboard (clears in ${CLIP_TIMEOUT}s)"
+        ( sleep $CLIP_TIMEOUT; echo -n "" | xclip -selection clipboard ) &
+    else
+        warn "xclip not installed: sudo apt install xclip"
+        echo -e "  ${DIM}Password: ${LGREEN}$TEXT${NC}"
+    fi
+}
+
+# ── Add entry ──────────────────────────────────────────────
+add_entry() {
+    local KEY="$1"
+    local VAULT_DATA="$2"
+
+    section "Add New Entry"
+
+    read -p "  Site/App name : " SITE < /dev/tty
+    read -p "  Username      : " USER < /dev/tty
+    echo -ne "  Password (leave empty to generate): "
+    read -r -s PASS < /dev/tty
+    echo ""
+
+    if [ -z "$PASS" ]; then
+        read -p "  Password length [16]: " PLEN < /dev/tty
+        PLEN="${PLEN:-16}"
+        read -p "  Type (all/simple/alpha/num) [all]: " PTYPE < /dev/tty
+        PTYPE="${PTYPE:-all}"
+        PASS=$(gen_password "$PLEN" "$PTYPE")
+        echo -e "  ${LGREEN}Generated: $PASS${NC}"
+    fi
+
+    read -p "  Notes (optional): " NOTES < /dev/tty
+    local TS
+    TS=$(date '+%Y-%m-%d %H:%M:%S')
+    local ID
+    ID=$(date +%s%N | md5sum | cut -c1-8)
+
+    local NEW_ENTRY="ENTRY|$ID|$SITE|$USER|$PASS|$NOTES|$TS"
+    local NEW_VAULT="${VAULT_DATA}
+${NEW_ENTRY}"
+
+    save_vault "$NEW_VAULT" "$KEY"
+    ok "Entry saved: $SITE"
+}
+
+# ── List entries ───────────────────────────────────────────
+list_entries() {
+    local VAULT_DATA="$1"
+    local SEARCH="${2:-}"
+
+    section "Vault Entries${SEARCH:+ — Search: $SEARCH}"
+
+    local count=0
+    printf "  ${YELLOW}${BOLD}%-8s %-22s %-22s %-12s %s${NC}\n" \
+        "ID" "SITE" "USERNAME" "ADDED" "NOTES"
+    echo -e "  ${DIM}$(printf '%*s' 80 | tr ' ' '─')${NC}"
+
+    while IFS='|' read -r TYPE ID SITE USER PASS NOTES TS; do
+        [ "$TYPE" != "ENTRY" ] && continue
+        if [ -n "$SEARCH" ]; then
+            echo "$SITE$USER$NOTES" | grep -qi "$SEARCH" || continue
+        fi
+        printf "  ${CYAN}%-8s${NC} ${LGREEN}%-22s${NC} %-22s ${DIM}%-12s %s${NC}\n" \
+            "$ID" "${SITE:0:22}" "${USER:0:22}" "${TS:0:10}" "${NOTES:0:20}"
+        ((count++))
+    done < <(echo "$VAULT_DATA")
+
+    echo ""
+    [ $count -eq 0 ] && warn "No entries found" || info "Total: $count entries"
+}
+
+# ── View entry ─────────────────────────────────────────────
+# FIX: loop ke andar read < /dev/tty, process substitution use karo
+view_entry() {
+    local KEY="$1"
+    local VAULT_DATA="$2"
+
+    section "View Entry"
+    list_entries "$VAULT_DATA"
+
+    read -p "  Enter ID to view: " SEARCH_ID < /dev/tty
+
+    local found=0
+    local FOUND_PASS=""
+
+    while IFS='|' read -r TYPE ID SITE USER PASS NOTES TS; do
+        [ "$TYPE" != "ENTRY" ] && continue
+        [ "$ID" != "$SEARCH_ID" ] && continue
+
+        found=1
+        FOUND_PASS="$PASS"
+
+        echo ""
+        echo -e "  ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  ${YELLOW}${BOLD}Site     :${NC} $SITE"
+        echo -e "  ${YELLOW}${BOLD}Username :${NC} $USER"
+        echo -e "  ${YELLOW}${BOLD}Password :${NC} ${LGREEN}$PASS${NC}"
+        echo -e "  ${YELLOW}${BOLD}Notes    :${NC} $NOTES"
+        echo -e "  ${YELLOW}${BOLD}Added    :${NC} $TS"
+        echo -e "  ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        break
+    done < <(echo "$VAULT_DATA")
+
+    if [ $found -eq 1 ]; then
+        read -p "  Copy password to clipboard? [Y/n]: " CLIP < /dev/tty
+        [[ ! "$CLIP" =~ ^[Nn]$ ]] && copy_clip "$FOUND_PASS"
+    else
+        fail "ID not found: $SEARCH_ID"
+    fi
+}
+
+# ── Delete entry ───────────────────────────────────────────
+delete_entry() {
+    local KEY="$1"
+    local VAULT_DATA="$2"
+
+    section "Delete Entry"
+    list_entries "$VAULT_DATA"
+
+    read -p "  Enter ID to delete: " DEL_ID < /dev/tty
+    read -p "  Confirm delete '$DEL_ID'? [y/N]: " CONFIRM < /dev/tty
+    [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && warn "Cancelled" && return 1
+
+    local NEW_VAULT=""
+    local deleted=0
+
+    while IFS= read -r line; do
+        local LID
+        LID=$(echo "$line" | cut -d'|' -f2)
+        if [ "$LID" = "$DEL_ID" ] && echo "$line" | grep -q "^ENTRY"; then
+            ((deleted++))
+            continue
+        fi
+        NEW_VAULT="${NEW_VAULT}
+${line}"
+    done < <(echo "$VAULT_DATA")
+
+    if [ $deleted -gt 0 ]; then
+        save_vault "$NEW_VAULT" "$KEY"
+        ok "Entry deleted"
+    else
+        fail "ID not found"
+    fi
+}
+
+# ── Edit entry ─────────────────────────────────────────────
+edit_entry() {
+    local KEY="$1"
+    local VAULT_DATA="$2"
+
+    section "Edit Entry"
+    list_entries "$VAULT_DATA"
+
+    read -p "  Enter ID to edit: " EDIT_ID < /dev/tty
+
+    local NEW_VAULT=""
+    local found=0
+
+    while IFS= read -r line; do
+        local TYPE ID
+        TYPE=$(echo "$line" | cut -d'|' -f1)
+        ID=$(echo "$line" | cut -d'|' -f2)
+
+        if [ "$TYPE" = "ENTRY" ] && [ "$ID" = "$EDIT_ID" ]; then
+            local OLD_SITE OLD_USER OLD_PASS OLD_NOTES
+            OLD_SITE=$(echo "$line"  | cut -d'|' -f3)
+            OLD_USER=$(echo "$line"  | cut -d'|' -f4)
+            OLD_PASS=$(echo "$line"  | cut -d'|' -f5)
+            OLD_NOTES=$(echo "$line" | cut -d'|' -f6)
+
+            echo ""
+            read -p "  Site [$OLD_SITE]: " NEW_SITE < /dev/tty
+            read -p "  Username [$OLD_USER]: " NEW_USER < /dev/tty
+            echo -ne "  Password (empty = keep current): "
+            read -r -s NEW_PASS < /dev/tty; echo ""
+            read -p "  Notes [$OLD_NOTES]: " NEW_NOTES < /dev/tty
+
+            NEW_SITE="${NEW_SITE:-$OLD_SITE}"
+            NEW_USER="${NEW_USER:-$OLD_USER}"
+            NEW_PASS="${NEW_PASS:-$OLD_PASS}"
+            NEW_NOTES="${NEW_NOTES:-$OLD_NOTES}"
+            local TS
+            TS=$(date '+%Y-%m-%d %H:%M:%S')
+
+            line="ENTRY|$ID|$NEW_SITE|$NEW_USER|$NEW_PASS|$NEW_NOTES|$TS"
+            found=1
+        fi
+        NEW_VAULT="${NEW_VAULT}
+${line}"
+    done < <(echo "$VAULT_DATA")
+
+    if [ $found -eq 1 ]; then
+        save_vault "$NEW_VAULT" "$KEY"
+        ok "Entry updated"
+    else
+        fail "ID not found"
+    fi
+}
+
+# ── Password generator standalone ─────────────────────────
+gen_standalone() {
+    section "Password Generator"
+    read -p "  Length [16]: " LEN < /dev/tty
+    LEN="${LEN:-16}"
+    echo -e "\n  ${YELLOW}${BOLD}Choose type:${NC}"
+    echo -e "  ${CYAN}1)${NC} All (letters + numbers + symbols)"
+    echo -e "  ${CYAN}2)${NC} Simple (letters + numbers)"
+    echo -e "  ${CYAN}3)${NC} Letters only"
+    echo -e "  ${CYAN}4)${NC} Numbers only"
+    read -p "  Choice [1]: " TC < /dev/tty
+    local MODE
+    case "${TC:-1}" in
+        1) MODE="all" ;;
+        2) MODE="simple" ;;
+        3) MODE="alpha" ;;
+        4) MODE="num" ;;
+        *) MODE="all" ;;
+    esac
+
+    echo ""
+    local PASSES=()
+    local i
+    for i in 1 2 3 4 5; do
+        PASSES[$i]=$(gen_password "$LEN" "$MODE")
+        printf "  ${LGREEN}%d)${NC} ${BOLD}%s${NC}\n" "$i" "${PASSES[$i]}"
+    done
+    echo ""
+    read -p "  Copy which? (1-5) or Enter to skip: " PICK < /dev/tty
+    if [[ "$PICK" =~ ^[1-5]$ ]]; then
+        copy_clip "${PASSES[$PICK]}"
+    fi
+}
+
+# ── Export vault ───────────────────────────────────────────
+export_vault() {
+    local VAULT_DATA="$1"
+    local OUTFILE="$HOME/nikson-vault-export-$(date +%Y%m%d).txt"
+
+    warn "This exports passwords in PLAIN TEXT!"
+    read -p "  Continue? [y/N]: " CONFIRM < /dev/tty
+    [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && return
+
+    echo "# NIKSON VAULT EXPORT — $(date)" > "$OUTFILE"
+    echo "# KEEP THIS FILE SECURE!" >> "$OUTFILE"
+    echo "" >> "$OUTFILE"
+
+    while IFS='|' read -r TYPE ID SITE USER PASS NOTES TS; do
+        [ "$TYPE" != "ENTRY" ] && continue
+        echo "Site     : $SITE"     >> "$OUTFILE"
+        echo "Username : $USER"     >> "$OUTFILE"
+        echo "Password : $PASS"     >> "$OUTFILE"
+        echo "Notes    : $NOTES"    >> "$OUTFILE"
+        echo "Added    : $TS"       >> "$OUTFILE"
+        echo "---"                  >> "$OUTFILE"
+    done < <(echo "$VAULT_DATA")
+
+    chmod 600 "$OUTFILE"
+    ok "Exported to: $OUTFILE"
+    warn "Delete this file after use!"
+}
+
+# ── Main ───────────────────────────────────────────────────
+main() {
+    check_deps
+    banner
+    init_vault
+
+    local KEY VAULT_DATA
+
+    if [ ! -f "$VAULT_FILE" ]; then
+        warn "New vault — set master password"
+        echo -ne "  ${YELLOW}${BOLD}New Master Password : ${NC}"
+        read -r -s MASTER1 < /dev/tty; echo ""
+        echo -ne "  ${YELLOW}${BOLD}Confirm Password    : ${NC}"
+        read -r -s MASTER2 < /dev/tty; echo ""
+
+        if [ "$MASTER1" != "$MASTER2" ]; then
+            fail "Passwords don't match!"
+            exit 1
+        fi
+        KEY=$(derive_key "$MASTER1")
+        save_vault "NIKSON_VAULT_V1" "$KEY"
+        ok "Vault created!"
+    else
+        echo -ne "  \033[1;33m\033[1mMaster Password: \033[0m"; read -r -s MASTER < /dev/tty; echo ""; KEY=$(derive_key "$MASTER")
+        if ! verify_master "$KEY"; then
+            fail "Wrong master password!"
+            exit 1
+        fi
+        ok "Vault unlocked!"
+    fi
+
+    VAULT_DATA=$(load_vault "$KEY")
+
+    while true; do
+        echo ""
+        local cols
+        cols=$(tput cols)
+        local line
+        line=$(printf '%*s' "$cols" | tr ' ' '─')
+        echo -e "${CYAN}${line}${NC}"
+        echo -e "  ${YELLOW}${BOLD}NIKSON VAULT MENU${NC}"
+        echo -e "${CYAN}${line}${NC}"
+        echo ""
+        echo -e "  ${CYAN}1)${NC} List all entries"
+        echo -e "  ${CYAN}2)${NC} View / Copy entry"
+        echo -e "  ${CYAN}3)${NC} Add new entry"
+        echo -e "  ${CYAN}4)${NC} Edit entry"
+        echo -e "  ${CYAN}5)${NC} Delete entry"
+        echo -e "  ${CYAN}6)${NC} Search entries"
+        echo -e "  ${CYAN}7)${NC} Generate password"
+        echo -e "  ${CYAN}8)${NC} Export vault (plaintext)"
+        echo -e "  ${CYAN}q)${NC} Lock & quit"
+        echo ""
+        read -p "  Choice: " CHOICE < /dev/tty
+
+        # Reload vault data each iteration
+        VAULT_DATA=$(load_vault "$KEY")
+
+        case $CHOICE in
+            1) list_entries "$VAULT_DATA" ;;
+            2) view_entry "$KEY" "$VAULT_DATA" ;;
+            3) add_entry "$KEY" "$VAULT_DATA" ;;
+            4) edit_entry "$KEY" "$VAULT_DATA" ;;
+            5) delete_entry "$KEY" "$VAULT_DATA" ;;
+            6)
+                read -p "  Search: " QUERY < /dev/tty
+                list_entries "$VAULT_DATA" "$QUERY"
+                ;;
+            7) gen_standalone ;;
+            8) export_vault "$VAULT_DATA" ;;
+            q)
+                ok "Vault locked. Goodbye!"
+                exit 0
+                ;;
+            *) echo -e "  ${RED}Invalid choice!${NC}" ;;
+        esac
+
+        read -p "  Press Enter to continue..." < /dev/tty
+    done
+}
+
+main "$@"

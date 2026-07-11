@@ -1,0 +1,337 @@
+#!/bin/bash
+
+# ═══════════════════════════════════════════════
+#  NIKSON OS — Advanced Recon Tool v2.0
+#  Tools: nmap, whois, dig, shodan, subfinder,
+#         wafw00f, ffuf, whatweb, curl, httpx
+# ═══════════════════════════════════════════════
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+banner() {
+clear
+echo -e "${CYAN}${BOLD}"
+cat << 'EOF'
+███╗   ██╗██╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗
+████╗  ██║██║██║ ██╔╝██╔════╝██╔═══██╗████╗  ██║
+██╔██╗ ██║██║█████╔╝ ███████╗██║   ██║██╔██╗ ██║
+██║╚██╗██║██║██╔═██╗ ╚════██║██║   ██║██║╚██╗██║
+██║ ╚████║██║██║  ██╗███████║╚██████╔╝██║ ╚████║
+╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝
+     ADVANCED RECON v2.0 — Hack. Build. Explore.
+EOF
+echo -e "${NC}"
+}
+
+check_tool() {
+    command -v "$1" &>/dev/null && \
+        echo -e "  ${GREEN}✓${NC} $1" || \
+        echo -e "  ${RED}✗${NC} $1 ${YELLOW}(not installed)${NC}"
+}
+
+install_missing() {
+    echo -e "\n${CYAN}[*] Checking required tools...${NC}"
+    MISSING=()
+
+    for tool in nmap whois dig curl whatweb wafw00f ffuf subfinder httpx shodan; do
+        if ! command -v "$tool" &>/dev/null; then
+            MISSING+=("$tool")
+        fi
+    done
+
+    if [ ${#MISSING[@]} -gt 0 ]; then
+        echo -e "${YELLOW}[!] Missing tools: ${MISSING[*]}${NC}"
+        read -p "Install missing tools? [y/N]: " INSTALL
+        if [[ "$INSTALL" =~ ^[Yy]$ ]]; then
+            sudo apt install -y nmap whois dnsutils curl whatweb wafw00f ffuf 2>/dev/null
+
+            # Go tools
+            if command -v go &>/dev/null; then
+                go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest 2>/dev/null
+                go install github.com/projectdiscovery/httpx/cmd/httpx@latest 2>/dev/null
+            else
+                echo -e "${YELLOW}[!] Go not installed — subfinder/httpx skipped${NC}"
+                echo -e "${YELLOW}    Install: sudo apt install golang${NC}"
+            fi
+
+            # Shodan CLI
+            pip3 install shodan --break-system-packages 2>/dev/null
+        fi
+    else
+        echo -e "${GREEN}[✓] All tools available${NC}"
+    fi
+}
+
+section() {
+    echo -e "\n${CYAN}╔══════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${BOLD}${YELLOW}$1${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════╝${NC}"
+}
+
+run_step() {
+    echo -ne "  ${YELLOW}[*]${NC} $1... "
+}
+
+done_step() {
+    echo -e "${GREEN}✓${NC}"
+}
+
+skip_step() {
+    echo -e "${RED}✗ skipped (not installed)${NC}"
+}
+
+banner
+
+# Target input
+if [ -z "$1" ]; then
+    echo -e "${CYAN}┌──────────────────────────────────────┐${NC}"
+    echo -e "${CYAN}│${NC}  Enter target domain or IP            ${CYAN}│${NC}"
+    echo -e "${CYAN}└──────────────────────────────────────┘${NC}"
+    read -p "  Target: " TARGET
+else
+    TARGET="$1"
+fi
+
+[ -z "$TARGET" ] && echo -e "${RED}[!] No target!${NC}" && exit 1
+
+# Output setup
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+OUTPUT="$HOME/nikson-reports/recon-${TARGET}-${TIMESTAMP}"
+mkdir -p "$OUTPUT"
+
+echo -e "\n${GREEN}[✓] Target   : ${CYAN}$TARGET${NC}"
+echo -e "${GREEN}[✓] Report   : ${CYAN}$OUTPUT${NC}"
+echo -e "${GREEN}[✓] Started  : ${CYAN}$(date)${NC}\n"
+
+install_missing
+
+# ─── MODULE 1: WHOIS ────────────────────────────────
+section "01 — WHOIS & Registration Info"
+run_step "WHOIS lookup"
+whois "$TARGET" > "$OUTPUT/01-whois.txt" 2>/dev/null
+done_step
+grep -E "Registrar:|Creation Date:|Expiry Date:|Name Server:" \
+    "$OUTPUT/01-whois.txt" 2>/dev/null | head -10
+
+# ─── MODULE 2: DNS ──────────────────────────────────
+section "02 — DNS Enumeration"
+run_step "A, MX, NS, TXT, AAAA records"
+{
+echo "=== A Records ==="
+dig A "$TARGET" +short
+echo -e "\n=== MX Records ==="
+dig MX "$TARGET" +short
+echo -e "\n=== NS Records ==="
+dig NS "$TARGET" +short
+echo -e "\n=== TXT Records ==="
+dig TXT "$TARGET" +short
+echo -e "\n=== AAAA Records ==="
+dig AAAA "$TARGET" +short
+echo -e "\n=== SOA Record ==="
+dig SOA "$TARGET" +short
+echo -e "\n=== CNAME ==="
+dig CNAME "$TARGET" +short
+} > "$OUTPUT/02-dns.txt" 2>/dev/null
+done_step
+cat "$OUTPUT/02-dns.txt"
+
+# ─── MODULE 3: SUBDOMAIN ────────────────────────────
+section "03 — Subdomain Enumeration"
+
+if command -v subfinder &>/dev/null; then
+    run_step "subfinder passive scan"
+    subfinder -d "$TARGET" -silent \
+        -o "$OUTPUT/03-subdomains.txt" 2>/dev/null
+    done_step
+    echo -e "  ${GREEN}Found: $(wc -l < "$OUTPUT/03-subdomains.txt") subdomains${NC}"
+    head -20 "$OUTPUT/03-subdomains.txt"
+else
+    run_step "DNS brute force (basic)"
+    WORDLIST=("www" "mail" "ftp" "admin" "api" "dev" "staging" \
+              "vpn" "remote" "portal" "blog" "shop" "test" \
+              "app" "cdn" "git" "ns1" "ns2" "smtp" "pop")
+    > "$OUTPUT/03-subdomains.txt"
+    for sub in "${WORDLIST[@]}"; do
+        RESULT=$(dig A "$sub.$TARGET" +short 2>/dev/null)
+        if [ -n "$RESULT" ]; then
+            echo -e "  ${GREEN}[+]${NC} $sub.$TARGET → $RESULT"
+            echo "$sub.$TARGET" >> "$OUTPUT/03-subdomains.txt"
+        fi
+    done
+    done_step
+fi
+
+# ─── MODULE 4: PORT SCAN ────────────────────────────
+section "04 — Port Scanning (Nmap)"
+run_step "Top 1000 ports + service detection"
+nmap -sV -sC --open -T4 \
+    -oN "$OUTPUT/04-nmap.txt" \
+    "$TARGET" 2>/dev/null
+done_step
+grep -E "^[0-9]+/|open|SERVICE" "$OUTPUT/04-nmap.txt" | head -30
+
+# ─── MODULE 5: WAF DETECTION ────────────────────────
+section "05 — WAF Detection"
+if command -v wafw00f &>/dev/null; then
+    run_step "WAF fingerprinting"
+    wafw00f "http://$TARGET" > "$OUTPUT/05-waf.txt" 2>/dev/null
+    wafw00f "https://$TARGET" >> "$OUTPUT/05-waf.txt" 2>/dev/null
+    done_step
+    grep -E "is behind|No WAF" "$OUTPUT/05-waf.txt" 2>/dev/null
+else
+    skip_step
+fi
+
+# ─── MODULE 6: WEB TECH ─────────────────────────────
+section "06 — Web Technology Detection"
+if command -v whatweb &>/dev/null; then
+    run_step "whatweb fingerprinting"
+    whatweb -a 3 "$TARGET" > "$OUTPUT/06-whatweb.txt" 2>/dev/null
+    done_step
+    cat "$OUTPUT/06-whatweb.txt"
+else
+    run_step "HTTP headers (curl)"
+    curl -sI "https://$TARGET" > "$OUTPUT/06-headers.txt" 2>/dev/null
+    done_step
+    grep -E "Server:|X-Powered-By:|Content-Type:|X-Frame" \
+        "$OUTPUT/06-headers.txt"
+fi
+
+# ─── MODULE 7: DIRECTORY FUZZING ────────────────────
+section "07 — Directory & File Fuzzing (ffuf)"
+if command -v ffuf &>/dev/null; then
+    WORDLIST="/usr/share/wordlists/dirb/common.txt"
+    if [ ! -f "$WORDLIST" ]; then
+        WORDLIST="/usr/share/dirb/wordlists/common.txt"
+    fi
+    if [ -f "$WORDLIST" ]; then
+        run_step "ffuf directory scan"
+        ffuf -u "http://$TARGET/FUZZ" \
+            -w "$WORDLIST" \
+            -mc 200,301,302,403 \
+            -o "$OUTPUT/07-ffuf.json" \
+            -of json \
+            -t 50 \
+            -timeout 10 \
+            -s 2>/dev/null
+        done_step
+        python3 -c "
+import json, sys
+try:
+    with open('$OUTPUT/07-ffuf.json') as f:
+        data = json.load(f)
+    results = data.get('results', [])
+    print(f'  Found {len(results)} paths:')
+    for r in results[:20]:
+        print(f'  [{r[\"status\"]}] /{r[\"input\"][\"FUZZ\"]}')
+except: pass
+" 2>/dev/null
+    else
+        echo -e "  ${YELLOW}[!] Wordlist not found — install dirb${NC}"
+        skip_step
+    fi
+else
+    skip_step
+fi
+
+# ─── MODULE 8: SHODAN ───────────────────────────────
+section "08 — Shodan Intelligence"
+if command -v shodan &>/dev/null; then
+    run_step "Shodan host lookup"
+    IP=$(dig A "$TARGET" +short | head -1)
+    if [ -n "$IP" ]; then
+        shodan host "$IP" > "$OUTPUT/08-shodan.txt" 2>/dev/null
+        if grep -q "Error\|No information" "$OUTPUT/08-shodan.txt" 2>/dev/null; then
+            echo -e "  ${YELLOW}[!] Initialize shodan: shodan init YOUR_API_KEY${NC}"
+        else
+            done_step
+            cat "$OUTPUT/08-shodan.txt"
+        fi
+    fi
+else
+    echo -e "  ${YELLOW}[!] Install: pip3 install shodan${NC}"
+    echo -e "  ${YELLOW}    Init   : shodan init YOUR_API_KEY${NC}"
+    skip_step
+fi
+
+# ─── MODULE 9: HTTPX PROBE ──────────────────────────
+section "09 — HTTP Probing (httpx)"
+if command -v httpx &>/dev/null && \
+    [ -f "$OUTPUT/03-subdomains.txt" ]; then
+    run_step "Probing live subdomains"
+    httpx -l "$OUTPUT/03-subdomains.txt" \
+        -title -status-code -tech-detect \
+        -o "$OUTPUT/09-httpx.txt" 2>/dev/null
+    done_step
+    head -20 "$OUTPUT/09-httpx.txt"
+else
+    skip_step
+fi
+
+# ─── MODULE 10: GEO & IP INFO ───────────────────────
+section "10 — GeoIP & IP Intelligence"
+run_step "IP geolocation"
+IP=$(dig A "$TARGET" +short | head -1)
+if [ -n "$IP" ]; then
+    curl -s "http://ip-api.com/json/$IP" 2>/dev/null | \
+        python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(f'  IP       : {d.get(\"query\",\"N/A\")}')
+    print(f'  Country  : {d.get(\"country\",\"N/A\")}')
+    print(f'  City     : {d.get(\"city\",\"N/A\")}')
+    print(f'  ISP      : {d.get(\"isp\",\"N/A\")}')
+    print(f'  Org      : {d.get(\"org\",\"N/A\")}')
+    print(f'  Timezone : {d.get(\"timezone\",\"N/A\")}')
+except: print('  Could not fetch GeoIP')
+" 2>/dev/null
+    done_step
+fi
+
+# ─── FINAL REPORT ───────────────────────────────────
+section "FINAL REPORT"
+
+{
+echo "╔══════════════════════════════════════════╗"
+echo "║      NIKSON OS — RECON REPORT v2.0       ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""
+echo "Target    : $TARGET"
+echo "IP        : $(dig A "$TARGET" +short | head -1)"
+echo "Date      : $(date)"
+echo "Tool      : nikson-recon v2.0"
+echo ""
+echo "── MODULES COMPLETED ──────────────────────"
+echo "[01] WHOIS          → 01-whois.txt"
+echo "[02] DNS            → 02-dns.txt"
+echo "[03] Subdomains     → 03-subdomains.txt"
+echo "[04] Port Scan      → 04-nmap.txt"
+echo "[05] WAF            → 05-waf.txt"
+echo "[06] Web Tech       → 06-whatweb.txt"
+echo "[07] Dir Fuzzing    → 07-ffuf.json"
+echo "[08] Shodan         → 08-shodan.txt"
+echo "[09] HTTP Probe     → 09-httpx.txt"
+echo "[10] GeoIP          → (inline)"
+echo ""
+echo "── OPEN PORTS ─────────────────────────────"
+grep "open" "$OUTPUT/04-nmap.txt" 2>/dev/null
+echo ""
+echo "── SUBDOMAINS ─────────────────────────────"
+cat "$OUTPUT/03-subdomains.txt" 2>/dev/null
+echo ""
+echo "── DNS RECORDS ────────────────────────────"
+cat "$OUTPUT/02-dns.txt" 2>/dev/null
+} > "$OUTPUT/REPORT.txt"
+
+echo -e "\n${CYAN}╔══════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}  ${GREEN}${BOLD}RECON COMPLETE!${NC}"
+echo -e "${CYAN}║${NC}  Report: ${CYAN}$OUTPUT/REPORT.txt${NC}"
+echo -e "${CYAN}║${NC}  Files : ${CYAN}$(ls $OUTPUT | wc -l) generated${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}\n"

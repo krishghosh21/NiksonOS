@@ -1,0 +1,408 @@
+#!/bin/bash
+
+# ============================================================
+#   NIKSON-CRACK — Smart Hash Cracker v2.0
+#   NiksonOS Custom Tool
+# ============================================================
+
+RED='\033[0;31m'
+LRED='\033[1;31m'
+GREEN='\033[0;32m'
+LGREEN='\033[1;32m'
+CYAN='\033[0;36m'
+LCYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+banner() {
+    clear
+    echo -e "${LGREEN}${BOLD}"
+    cat << 'BANNER'
+   ██████╗██████╗  █████╗  ██████╗██╗  ██╗
+  ██╔════╝██╔══██╗██╔══██╗██╔════╝██║ ██╔╝
+  ██║     ██████╔╝███████║██║     █████╔╝
+  ██║     ██╔══██╗██╔══██║██║     ██╔═██╗
+  ╚██████╗██║  ██║██║  ██║╚██████╗██║  ██╗
+   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+  NIKSON OS — Smart Hash Cracker v2.0
+BANNER
+    echo -e "${NC}"
+}
+
+section() {
+    echo -e "\n${CYAN}──────────────────────────────────────────────${NC}"
+    echo -e "  ${LGREEN}${BOLD}▶ $1${NC}"
+    echo -e "${CYAN}──────────────────────────────────────────────${NC}\n"
+}
+
+ok()   { echo -e "  ${LGREEN}[✓]${NC} $1"; }
+fail() { echo -e "  ${RED}[✗]${NC} $1"; }
+info() { echo -e "  ${LCYAN}[i]${NC} $1"; }
+warn() { echo -e "  ${YELLOW}[!]${NC} $1"; }
+
+# ── Detect hash type ───────────────────────────────────────
+detect_hash() {
+    local HASH="$1"
+    local LEN=${#HASH}
+
+    if echo "$HASH" | grep -qE '^\$2[aby]\$'; then
+        echo "bcrypt"
+    elif echo "$HASH" | grep -qE '^\$6\$'; then
+        echo "sha512crypt"
+    elif echo "$HASH" | grep -qE '^\$5\$'; then
+        echo "sha256crypt"
+    elif echo "$HASH" | grep -qE '^\$1\$'; then
+        echo "md5crypt"
+    elif echo "$HASH" | grep -qE '^[0-9a-fA-F]+$'; then
+        case $LEN in
+            32)  echo "md5" ;;
+            40)  echo "sha1" ;;
+            56)  echo "sha224" ;;
+            64)  echo "sha256" ;;
+            96)  echo "sha384" ;;
+            128) echo "sha512" ;;
+            16)  echo "mysql323" ;;
+            *)   echo "unknown" ;;
+        esac
+    else
+        echo "unknown"
+    fi
+}
+
+# ── Hashcat mode ───────────────────────────────────────────
+hashcat_mode() {
+    case "$1" in
+        md5)         echo "0" ;;
+        sha1)        echo "100" ;;
+        sha224)      echo "1300" ;;
+        sha256)      echo "1400" ;;
+        sha384)      echo "10800" ;;
+        sha512)      echo "1700" ;;
+        md5crypt)    echo "500" ;;
+        sha256crypt) echo "7400" ;;
+        sha512crypt) echo "1800" ;;
+        bcrypt)      echo "3200" ;;
+        mysql323)    echo "200" ;;
+        ntlm)        echo "1000" ;;
+        *)           echo "0" ;;
+    esac
+}
+
+# ── John format ────────────────────────────────────────────
+john_format() {
+    case "$1" in
+        md5)         echo "raw-md5" ;;
+        sha1)        echo "raw-sha1" ;;
+        sha256)      echo "raw-sha256" ;;
+        sha512)      echo "raw-sha512" ;;
+        md5crypt)    echo "md5crypt" ;;
+        sha512crypt) echo "sha512crypt" ;;
+        bcrypt)      echo "bcrypt" ;;
+        ntlm)        echo "nt" ;;
+        *)           echo "auto" ;;
+    esac
+}
+
+# ── Online lookup ──────────────────────────────────────────
+online_lookup() {
+    local HASH="$1"
+    local TYPE="$2"
+
+    section "Online Lookup"
+
+    # CrackStation
+    info "Trying CrackStation..."
+    RESULT=$(curl -s -X POST "https://crackstation.net/crack.js" \
+        -d "request=$HASH&fields=hash,type,hash_type,cracked,plaintext" \
+        -H "Referer: https://crackstation.net/" \
+        -H "User-Agent: Mozilla/5.0" \
+        --max-time 10 2>/dev/null | \
+        python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    if isinstance(d,list) and len(d)>0 and d[0].get('cracked'):
+        print(d[0]['plaintext'])
+except:
+    pass
+" 2>/dev/null)
+    if [ -n "$RESULT" ]; then
+        ok "CRACKED via CrackStation: ${BOLD}${LGREEN}$RESULT${NC}"
+        return 0
+    fi
+    fail "CrackStation: not found"
+
+    # hashes.com
+    info "Trying hashes.com..."
+    RESULT=$(curl -s "https://hashes.com/en/api/identifier" \
+        -d "hashes[]=$HASH" \
+        --max-time 10 2>/dev/null | \
+        python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    h=d.get('hashes',[])
+    if h and h[0].get('plaintext'):
+        print(h[0]['plaintext'])
+except:
+    pass
+" 2>/dev/null)
+    if [ -n "$RESULT" ]; then
+        ok "CRACKED via hashes.com: ${BOLD}${LGREEN}$RESULT${NC}"
+        return 0
+    fi
+    fail "hashes.com: not found"
+
+    # md5.gromweb.com (MD5 only)
+    if [ "$TYPE" = "md5" ]; then
+        info "Trying md5.gromweb.com..."
+        RESULT=$(curl -s "https://md5.gromweb.com/?md5=$HASH" \
+            --max-time 10 2>/dev/null | \
+            grep -oP '(?<=<em class="translate">).*?(?=</em>)' | head -1)
+        if [ -n "$RESULT" ]; then
+            ok "CRACKED via gromweb: ${BOLD}${LGREEN}$RESULT${NC}"
+            return 0
+        fi
+        fail "gromweb: not found"
+
+        # nitrxgen
+        info "Trying nitrxgen..."
+        RESULT=$(curl -s "http://www.nitrxgen.net/md5db/$HASH" \
+            --max-time 10 2>/dev/null)
+        if [ -n "$RESULT" ] && [ ${#RESULT} -lt 50 ]; then
+            ok "CRACKED via nitrxgen: ${BOLD}${LGREEN}$RESULT${NC}"
+            return 0
+        fi
+        fail "nitrxgen: not found"
+    fi
+
+    # sha1 specific
+    if [ "$TYPE" = "sha1" ]; then
+        info "Trying sha1.gromweb.com..."
+        RESULT=$(curl -s "https://sha1.gromweb.com/?sha1=$HASH" \
+            --max-time 10 2>/dev/null | \
+            grep -oP '(?<=<em class="translate">).*?(?=</em>)' | head -1)
+        if [ -n "$RESULT" ]; then
+            ok "CRACKED via sha1.gromweb: ${BOLD}${LGREEN}$RESULT${NC}"
+            return 0
+        fi
+        fail "sha1.gromweb: not found"
+    fi
+
+    echo ""
+    warn "Not found in any online database"
+    info "Try manually: https://crackstation.net"
+    info "Try manually: https://hashes.com/en/decrypt/hash"
+    return 1
+}
+
+# ── Wordlist crack ─────────────────────────────────────────
+wordlist_crack() {
+    local HASH="$1"
+    local TYPE="$2"
+    local WORDLIST="$3"
+
+    section "Wordlist Attack — $(basename $WORDLIST)"
+
+    if [ ! -f "$WORDLIST" ]; then
+        fail "Wordlist not found: $WORDLIST"
+        return 1
+    fi
+
+    info "Hash type : $TYPE"
+    info "Wordlist  : $WORDLIST ($(wc -l < "$WORDLIST") words)"
+    echo ""
+
+    # John
+    if command -v john &>/dev/null; then
+        info "Using John the Ripper..."
+        local TMPFILE=$(mktemp)
+        echo "$HASH" > "$TMPFILE"
+        local FMT=$(john_format "$TYPE")
+        john --format="$FMT" --wordlist="$WORDLIST" "$TMPFILE" 2>/dev/null
+        RESULT=$(john --show --format="$FMT" "$TMPFILE" 2>/dev/null | \
+            grep -v "password hashes" | head -1 | cut -d: -f2)
+        rm -f "$TMPFILE"
+        if [ -n "$RESULT" ]; then
+            ok "CRACKED with John: ${BOLD}${LGREEN}$RESULT${NC}"
+            return 0
+        fi
+        fail "John: not cracked"
+    fi
+
+    # Hashcat
+    if command -v hashcat &>/dev/null; then
+        info "Using Hashcat..."
+        local MODE=$(hashcat_mode "$TYPE")
+        local TMPFILE=$(mktemp)
+        echo "$HASH" > "$TMPFILE"
+        hashcat -m "$MODE" "$TMPFILE" "$WORDLIST" \
+            --quiet --potfile-disable 2>/dev/null
+        RESULT=$(hashcat -m "$MODE" "$TMPFILE" "$WORDLIST" \
+            --quiet --potfile-disable --show 2>/dev/null | cut -d: -f2)
+        rm -f "$TMPFILE"
+        if [ -n "$RESULT" ]; then
+            ok "CRACKED with Hashcat: ${BOLD}${LGREEN}$RESULT${NC}"
+            return 0
+        fi
+        fail "Hashcat: not cracked"
+    fi
+
+    # Manual bash check
+    if [[ "$TYPE" == "md5" || "$TYPE" == "sha1" || \
+          "$TYPE" == "sha256" || "$TYPE" == "sha512" ]]; then
+        info "Manual check (first 50000 words)..."
+        local count=0
+        while IFS= read -r word && [ $count -lt 50000 ]; do
+            case "$TYPE" in
+                md5)    COMPUTED=$(echo -n "$word" | md5sum | cut -d' ' -f1) ;;
+                sha1)   COMPUTED=$(echo -n "$word" | sha1sum | cut -d' ' -f1) ;;
+                sha256) COMPUTED=$(echo -n "$word" | sha256sum | cut -d' ' -f1) ;;
+                sha512) COMPUTED=$(echo -n "$word" | sha512sum | cut -d' ' -f1) ;;
+            esac
+            if [ "$COMPUTED" = "$HASH" ]; then
+                ok "CRACKED manually: ${BOLD}${LGREEN}$word${NC}"
+                return 0
+            fi
+            ((count++))
+        done < "$WORDLIST"
+        fail "Manual check: not cracked"
+    fi
+
+    return 1
+}
+
+# ── Brute force ────────────────────────────────────────────
+brute_force() {
+    local HASH="$1"
+    local TYPE="$2"
+    local MAX_LEN="${3:-4}"
+
+    section "Brute Force (max length: $MAX_LEN)"
+
+    if command -v hashcat &>/dev/null; then
+        local MODE=$(hashcat_mode "$TYPE")
+        local TMPFILE=$(mktemp)
+        echo "$HASH" > "$TMPFILE"
+        for len in $(seq 1 $MAX_LEN); do
+            info "Trying length $len..."
+            MASK=$(printf '%0.s?' $(seq 1 $len))
+            hashcat -m "$MODE" "$TMPFILE" -a 3 "$MASK" \
+                --quiet --potfile-disable 2>/dev/null
+            RESULT=$(hashcat -m "$MODE" "$TMPFILE" -a 3 "$MASK" \
+                --quiet --potfile-disable --show 2>/dev/null | cut -d: -f2)
+            if [ -n "$RESULT" ]; then
+                ok "CRACKED: ${BOLD}${LGREEN}$RESULT${NC}"
+                rm -f "$TMPFILE"
+                return 0
+            fi
+        done
+        rm -f "$TMPFILE"
+    else
+        warn "Hashcat not installed: sudo apt install hashcat"
+    fi
+
+    fail "Brute force: not cracked"
+    return 1
+}
+
+# ── Smart auto crack ───────────────────────────────────────
+smart_crack() {
+    local HASH="$1"
+
+    section "Smart Auto Crack"
+    info "Hash : $HASH"
+
+    TYPE=$(detect_hash "$HASH")
+    info "Type : ${BOLD}${YELLOW}$TYPE${NC}"
+    [ "$TYPE" = "unknown" ] && TYPE="md5" && warn "Unknown — trying MD5"
+
+    # 1. Online
+    online_lookup "$HASH" "$TYPE" && return 0
+
+    # 2. Wordlists
+    WORDLISTS=(
+        "/usr/share/wordlists/rockyou.txt"
+        "/usr/share/wordlists/fasttrack.txt"
+        "/usr/share/john/password.lst"
+    )
+    for WL in "${WORDLISTS[@]}"; do
+        [ -f "$WL" ] && wordlist_crack "$HASH" "$TYPE" "$WL" && return 0
+    done
+
+    # 3. Brute force
+    brute_force "$HASH" "$TYPE" 4
+
+    echo ""
+    section "Manual Commands"
+    info "Hashcat : hashcat -m $(hashcat_mode $TYPE) hash.txt /usr/share/wordlists/rockyou.txt"
+    info "John    : john --format=$(john_format $TYPE) --wordlist=/usr/share/wordlists/rockyou.txt hash.txt"
+    info "Online  : https://crackstation.net"
+    info "Online  : https://hashes.com/en/decrypt/hash"
+}
+
+# ── Crack from file ────────────────────────────────────────
+crack_file() {
+    local FILE="$1"
+    section "Cracking from file: $FILE"
+    [ ! -f "$FILE" ] && fail "File not found" && return 1
+    local count=0
+    while IFS= read -r hash; do
+        [ -z "$hash" ] && continue
+        echo -e "\n  ${YELLOW}── Hash: $hash${NC}"
+        smart_crack "$hash"
+        ((count++))
+    done < "$FILE"
+    info "Processed: $count hashes"
+}
+
+# ── Main ───────────────────────────────────────────────────
+main() {
+    banner
+
+    [ -n "$1" ] && smart_crack "$1" && exit 0
+
+    echo -e "  ${YELLOW}${BOLD}Choose mode:${NC}\n"
+    echo -e "  ${CYAN}1)${NC} Smart crack    — auto detect + all methods"
+    echo -e "  ${CYAN}2)${NC} Online only    — CrackStation + hashes.com"
+    echo -e "  ${CYAN}3)${NC} Wordlist       — custom wordlist"
+    echo -e "  ${CYAN}4)${NC} Brute force    — short passwords"
+    echo -e "  ${CYAN}5)${NC} Crack from file"
+    echo -e "  ${CYAN}6)${NC} Identify hash"
+    echo -e "  ${CYAN}q)${NC} Quit"
+    echo ""
+    read -p "  Choice: " CHOICE
+
+    case $CHOICE in
+        1) read -p "  Hash: " H; smart_crack "$H" ;;
+        2) read -p "  Hash: " H
+           TYPE=$(detect_hash "$H")
+           online_lookup "$H" "$TYPE" ;;
+        3) read -p "  Hash: " H
+           read -p "  Wordlist [/usr/share/wordlists/rockyou.txt]: " WL
+           WL="${WL:-/usr/share/wordlists/rockyou.txt}"
+           TYPE=$(detect_hash "$H")
+           wordlist_crack "$H" "$TYPE" "$(eval echo $WL)" ;;
+        4) read -p "  Hash: " H
+           read -p "  Max length [4]: " ML
+           ML="${ML:-4}"
+           TYPE=$(detect_hash "$H")
+           brute_force "$H" "$TYPE" "$ML" ;;
+        5) read -p "  File path: " F; crack_file "$F" ;;
+        6) read -p "  Hash: " H
+           TYPE=$(detect_hash "$H")
+           section "Hash Info"
+           info "Hash     : $H"
+           info "Length   : ${#H}"
+           info "Type     : ${BOLD}${YELLOW}$TYPE${NC}"
+           info "HC Mode  : $(hashcat_mode $TYPE)"
+           info "John Fmt : $(john_format $TYPE)" ;;
+        q) exit 0 ;;
+        *) echo -e "${RED}Invalid!${NC}" ;;
+    esac
+}
+
+mkdir -p "$HOME/nikson-reports"
+main "$@"

@@ -1,0 +1,1038 @@
+#!/usr/bin/env python3
+
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GLib, Pango, Gdk
+import subprocess
+import threading
+import os
+import shutil
+
+# ─────────────────────────────────────────────
+#  MASTER TOOL DATABASE  —  375+ tools
+# ─────────────────────────────────────────────
+TOOLS = {
+    "Information Gathering": [
+        ("nmap",            "Network port scanner & service detector"),
+        ("wireshark",       "GUI packet analyzer"),
+        ("tcpdump",         "CLI packet capture tool"),
+        ("netdiscover",     "ARP network scanner"),
+        ("masscan",         "Fast TCP port scanner"),
+        ("arp-scan",        "ARP host discovery"),
+        ("whois",           "Domain registration lookup"),
+        ("dnsutils",        "DNS tools: dig, nslookup"),
+        ("dnsenum",         "DNS enumeration"),
+        ("dnsrecon",        "DNS reconnaissance"),
+        ("fierce",          "DNS brute forcer"),
+        ("theharvester",    "Email & subdomain OSINT"),
+        ("recon-ng",        "Modular OSINT framework"),
+        ("maltego",         "Visual link analysis"),
+        ("dmitry",          "Deep Magic Information Gatherer"),
+        ("nbtscan",         "NetBIOS scanner"),
+        ("enum4linux",      "SMB/Windows enumeration"),
+        ("smbclient",       "SMB client tool"),
+        ("ldap-utils",      "LDAP query tools"),
+        ("snmp",            "SNMP protocol tools"),
+        ("snmpwalk",        "SNMP MIB walker"),
+        ("smtp-user-enum",  "SMTP user enumeration"),
+        ("sslyze",          "SSL/TLS analyzer"),
+        ("sslscan",         "SSL/TLS scanner"),
+        ("wafw00f",         "WAF fingerprinter"),
+        ("whatweb",         "Web technology fingerprinter"),
+        ("metagoofil",      "Document metadata extractor"),
+        ("exiftool",        "File metadata reader"),
+        ("unicornscan",     "Fast asynchronous scanner"),
+        ("onesixtyone",     "Fast SNMP scanner"),
+        ("p0f",             "Passive OS fingerprinting"),
+        ("amap",            "Application protocol detector"),
+        ("netcat",          "Network Swiss Army knife"),
+        ("socat",           "Advanced netcat"),
+        ("fping",           "Parallel ping tool"),
+        ("hping3",          "Packet crafting tool"),
+        ("arping",          "ARP ping utility"),
+        ("traceroute",      "Network path tracer"),
+        ("mtr",             "Traceroute + ping combined"),
+        ("lbd",             "Load balancer detector"),
+        ("ike-scan",        "IPsec VPN scanner"),
+        ("urlcrazy",        "Typosquatting domain checker"),
+        ("sublist3r",       "Subdomain enumeration"),
+        ("amass",           "Network mapping & OSINT"),
+        ("spiderfoot",      "OSINT automation tool"),
+        ("shodan",          "Shodan CLI search"),
+        ("sslstrip",        "SSL stripping tool"),
+    ],
+    "Web Application": [
+        ("sqlmap",          "Automatic SQL injection tool"),
+        ("nikto",           "Web server vulnerability scanner"),
+        ("gobuster",        "Directory & DNS brute forcer"),
+        ("dirb",            "Web content scanner"),
+        ("dirbuster",       "GUI directory bruteforcer"),
+        ("wfuzz",           "Web application fuzzer"),
+        ("ffuf",            "Fast web fuzzer"),
+        ("burpsuite",       "Web proxy & security suite"),
+        ("wpscan",          "WordPress vulnerability scanner"),
+        ("joomscan",        "Joomla vulnerability scanner"),
+        ("commix",          "Command injection exploiter"),
+        ("xsser",           "XSS attack framework"),
+        ("w3af",            "Web application attack framework"),
+        ("skipfish",        "Web security recon"),
+        ("arjun",           "HTTP parameter discovery"),
+        ("dirsearch",       "Web path scanner"),
+        ("cutycapt",        "Web screenshot tool"),
+        ("httrack",         "Website copier"),
+        ("zaproxy",         "OWASP ZAP web scanner"),
+        ("wapiti",          "Web vulnerability scanner"),
+        ("padbuster",       "Automated padding oracle"),
+        ("davtest",         "WebDAV tester"),
+        ("cadaver",         "WebDAV client"),
+        ("fimap",           "LFI/RFI vulnerability scanner"),
+        ("uniscan",         "Web vulnerability scanner"),
+        ("dotdotpwn",       "Directory traversal fuzzer"),
+        ("golismero",       "Web security scanner"),
+        ("beef-xss",        "Browser exploitation framework"),
+        ("set",             "Social Engineering Toolkit"),
+        ("faraday",         "Vulnerability management"),
+        ("mitmproxy",       "Interactive MITM proxy"),
+        ("sslsplit",        "Transparent SSL proxy"),
+        ("webscarab",       "Web security testing proxy"),
+        ("grabber",         "Web vulnerability scanner"),
+        ("websploit",       "Web exploitation framework"),
+        ("jwt-tool",        "JWT testing toolkit"),
+    ],
+    "Password Attacks": [
+        ("hashcat",         "GPU-accelerated password cracker"),
+        ("john",            "John the Ripper"),
+        ("hydra",           "Network login brute forcer"),
+        ("medusa",          "Parallel brute forcer"),
+        ("crunch",          "Wordlist generator"),
+        ("cewl",            "Custom wordlist from website"),
+        ("wordlists",       "Common wordlist collection"),
+        ("brutespray",      "Auto brute force services"),
+        ("ncrack",          "Network authentication cracker"),
+        ("ophcrack",        "Windows LM/NTLM cracker"),
+        ("fcrackzip",       "ZIP password cracker"),
+        ("pdfcrack",        "PDF password cracker"),
+        ("rarcrack",        "RAR/ZIP/7z password cracker"),
+        ("samdump2",        "Windows SAM database dumper"),
+        ("chntpw",          "Windows password reset"),
+        ("patator",         "Multi-purpose brute forcer"),
+        ("hashid",          "Hash type identifier"),
+        ("hash-identifier", "Identify hash types"),
+        ("pipal",           "Password analyzer"),
+        ("pack",            "Password analysis & cracking kit"),
+        ("rsmangler",       "Wordlist mangler"),
+        ("princeprocessor", "PRINCE wordlist generator"),
+        ("statsprocessor",  "Markov chain wordlist generator"),
+        ("maskprocessor",   "Mask-based wordlist generator"),
+        ("kwprocessor",     "Keyboard walk generator"),
+        ("rainbowcrack",    "Rainbow table cracker"),
+        ("findmyhash",      "Online hash lookup"),
+        ("mentalist",       "Wordlist generator GUI"),
+        ("ophcrack",        "Windows password cracker"),
+    ],
+    "Wireless Attacks": [
+        ("aircrack-ng",     "WiFi WEP/WPA cracking suite"),
+        ("kismet",          "Wireless network detector"),
+        ("reaver",          "WPS PIN brute forcer"),
+        ("wifite",          "Automated WiFi auditor"),
+        ("bully",           "WPS brute force tool"),
+        ("mdk4",            "WiFi stress testing tool"),
+        ("hostapd",         "Software access point daemon"),
+        ("hostapd-wpe",     "WPA enterprise attack"),
+        ("bettercap",       "Network attack framework"),
+        ("ettercap",        "MITM attack tool"),
+        ("dsniff",          "Network sniffer suite"),
+        ("macchanger",      "MAC address spoofer"),
+        ("rfkill",          "RF device manager"),
+        ("iw",              "WiFi configuration tool"),
+        ("wireless-tools",  "Wireless network tools"),
+        ("wifiphisher",     "WiFi phishing tool"),
+        ("pixiewps",        "WPS offline PIN cracker"),
+        ("mfoc",            "MIFARE offline cracker"),
+        ("mfcuk",           "MIFARE classic crack"),
+        ("gnuradio",        "Software defined radio"),
+        ("gqrx",            "SDR receiver"),
+        ("ubertooth-tools", "Bluetooth analysis"),
+        ("bluesnarfer",     "Bluetooth data extractor"),
+        ("btscanner",       "Bluetooth scanner"),
+        ("airgeddon",       "Wireless auditing script"),
+        ("fern-wifi-cracker","GUI WiFi auditor"),
+        ("eaphammer",       "WPA enterprise attacks"),
+        ("rfcat",           "RF analysis tool"),
+    ],
+    "Exploitation": [
+        ("metasploit-framework", "The ultimate exploit framework"),
+        ("exploitdb",       "Offline exploit database"),
+        ("searchsploit",    "Exploit DB CLI search"),
+        ("armitage",        "Metasploit GUI"),
+        ("veil-framework",  "AV evasion framework"),
+        ("shellter",        "Dynamic shellcode injector"),
+        ("powersploit",     "PowerShell exploit scripts"),
+        ("routersploit",    "Router exploit framework"),
+        ("impacket-scripts","Network protocol exploitation"),
+        ("crackmapexec",    "Network pivoting toolkit"),
+        ("responder",       "LLMNR/NBT-NS/mDNS poisoner"),
+        ("mitm6",           "IPv6 MITM attack"),
+        ("bloodhound",      "AD attack path mapper"),
+        ("kerbrute",        "Kerberos brute forcer"),
+        ("mimikatz",        "Windows credentials dumper"),
+        ("beef-xss",        "Browser exploitation framework"),
+        ("set",             "Social Engineering Toolkit"),
+        ("ms17-010",        "EternalBlue scanner/exploit"),
+        ("empire",          "PowerShell post-exploitation"),
+        ("covenant",        "C2 framework"),
+        ("autopwn2",        "Automated network exploit"),
+        ("rubeus",          "Kerberos attack toolkit"),
+        ("chisel",          "TCP/UDP tunnel over HTTP"),
+    ],
+    "Reverse Engineering": [
+        ("ghidra",          "NSA reverse engineering suite"),
+        ("radare2",         "CLI RE framework"),
+        ("binwalk",         "Firmware analysis tool"),
+        ("gdb",             "GNU debugger"),
+        ("ltrace",          "Library call tracer"),
+        ("strace",          "System call tracer"),
+        ("valgrind",        "Memory analysis"),
+        ("strings",         "Extract printable strings"),
+        ("objdump",         "Binary disassembler"),
+        ("hexedit",         "Terminal hex editor"),
+        ("xxd",             "Hex dump tool"),
+        ("file",            "File type identifier"),
+        ("apktool",         "Android APK reverse engineer"),
+        ("jadx",            "Android DEX decompiler"),
+        ("dex2jar",         "DEX to JAR converter"),
+        ("pwntools",        "CTF exploit development"),
+        ("ROPgadget",       "ROP chain finder"),
+        ("ropper",          "ROP gadget finder"),
+        ("checksec",        "Binary security checker"),
+        ("retdec",          "Retargetable decompiler"),
+        ("angr",            "Binary analysis framework"),
+        ("frida-tools",     "Dynamic instrumentation"),
+        ("rizin",           "Modern radare2 fork"),
+        ("cutter",          "GUI for radare2/rizin"),
+        ("pwndbg",          "GDB plugin for exploit dev"),
+        ("bytecode-viewer", "Java/Android bytecode viewer"),
+        ("jd-gui",          "Java decompiler GUI"),
+    ],
+    "Forensics & Stego": [
+        ("volatility3",     "Memory forensics framework"),
+        ("foremost",        "File carving by header/footer"),
+        ("autopsy",         "Digital forensics GUI"),
+        ("sleuthkit",       "CLI forensic toolkit"),
+        ("dcfldd",          "Enhanced forensic dd"),
+        ("testdisk",        "Partition & boot repair"),
+        ("photorec",        "Multi-format file recovery"),
+        ("bulk-extractor",  "Forensic feature extractor"),
+        ("scalpel",         "File carver"),
+        ("exiv2",           "Image metadata tool"),
+        ("steghide",        "Steganography hide/extract"),
+        ("stegosuite",      "Steganography GUI"),
+        ("outguess",        "Universal steganography"),
+        ("stegcracker",     "Steganography brute forcer"),
+        ("zsteg",           "PNG/BMP steganography"),
+        ("pngcheck",        "PNG file validator"),
+        ("guymager",        "Forensic disk imager GUI"),
+        ("rkhunter",        "Rootkit hunter"),
+        ("chkrootkit",      "Rootkit checker"),
+        ("lynis",           "Security audit tool"),
+        ("aide",            "File integrity checker"),
+        ("unhide",          "Find hidden processes"),
+        ("yara",            "Malware pattern matcher"),
+        ("clamav",          "Open source antivirus"),
+        ("pdf-parser",      "PDF structure analyzer"),
+        ("peepdf",          "PDF analysis tool"),
+        ("oletools",        "MS Office malware analysis"),
+        ("networkminer",    "Network forensic analyzer"),
+        ("exif",            "EXIF data reader"),
+        ("binwalk",         "Firmware/binary analyzer"),
+    ],
+    "Sniffing & Spoofing": [
+        ("wireshark",       "GUI packet analyzer"),
+        ("tshark",          "CLI Wireshark"),
+        ("tcpdump",         "Packet capture"),
+        ("bettercap",       "MITM framework"),
+        ("ettercap",        "MITM suite"),
+        ("responder",       "NBT-NS/LLMNR poisoner"),
+        ("iftop",           "Network bandwidth monitor"),
+        ("nethogs",         "Per-process bandwidth"),
+        ("darkstat",        "Network statistics daemon"),
+        ("driftnet",        "Capture images from traffic"),
+        ("tcpflow",         "TCP stream extractor"),
+        ("tcpreplay",       "Replay pcap files"),
+        ("tcptrack",        "TCP connection tracker"),
+        ("ngrep",           "Network grep"),
+        ("urlsnarf",        "URL sniffer"),
+        ("mailsnarf",       "Email sniffer"),
+        ("arpwatch",        "ARP activity monitor"),
+        ("netsniff-ng",     "High-performance sniffer"),
+        ("chaosreader",     "TCP session reconstructor"),
+        ("xplico",          "Network forensics tool"),
+        ("sslstrip",        "HTTPS downgrade attack"),
+        ("mitmproxy",       "Interactive MITM proxy"),
+        ("sslsplit",        "Transparent SSL proxy"),
+        ("dsniff",          "Password sniffer suite"),
+        ("p0f",             "Passive fingerprinter"),
+    ],
+    "Vulnerability Analysis": [
+        ("openvas",         "Open vulnerability scanner"),
+        ("lynis",           "Unix security auditor"),
+        ("nikto",           "Web server scanner"),
+        ("vuls",            "Go-based vulnerability scanner"),
+        ("grype",           "Container vulnerability scanner"),
+        ("trivy",           "Container security scanner"),
+        ("clair",           "Container vulnerability scanner"),
+        ("bandit",          "Python security linter"),
+        ("semgrep",         "Static analysis multi-lang"),
+        ("retire.js",       "JS vulnerable library scanner"),
+        ("snyk",            "Dependency vulnerability finder"),
+        ("safety",          "Python package auditor"),
+        ("bundler-audit",   "Ruby gem auditor"),
+        ("nmap",            "NSE vulnerability scripts"),
+        ("wazuh",           "SIEM & vulnerability manager"),
+        ("anchore",         "Container policy enforcement"),
+        ("sonarqube",       "Code quality & security"),
+        ("owasp-dependency-check", "Java dependency check"),
+        ("faraday",         "Vulnerability management"),
+        ("dradis",          "Security collaboration tool"),
+    ],
+    "Social Engineering": [
+        ("set",             "Social Engineering Toolkit"),
+        ("gophish",         "Phishing simulation framework"),
+        ("evilginx2",       "Advanced phishing proxy"),
+        ("modlishka",       "Phishing reverse proxy"),
+        ("king-phisher",    "Phishing campaign tool"),
+        ("zphisher",        "30+ phishing templates"),
+        ("shellphish",      "Phishing tool"),
+        ("blackeye",        "Multi-site phishing"),
+        ("maltego",         "Social network OSINT"),
+        ("creepy",          "Geolocation OSINT"),
+        ("sherlock",        "Username OSINT hunter"),
+        ("socialscan",      "Username/email checker"),
+        ("holehe",          "Email site registrations"),
+        ("nexfil",          "Username finder"),
+        ("phoneinfoga",     "Phone number OSINT"),
+        ("twint",           "Twitter scraper"),
+        ("instaloader",     "Instagram downloader"),
+        ("osrframework",    "OSINT framework"),
+        ("gitleaks",        "Git secret scanner"),
+        ("trufflesniffer",  "Git history scanner"),
+        ("gitrob",          "GitHub sensitive files"),
+        ("gitdumper",       "Git repository dumper"),
+        ("credmaster",      "Credential stuffing tool"),
+        ("spiderfoot",      "Automated OSINT"),
+        ("recon-ng",        "OSINT framework"),
+    ],
+    "Stress Testing": [
+        ("hping3",          "Packet crafting & DoS test"),
+        ("mdk4",            "WiFi DoS testing"),
+        ("t50",             "Network stress tool"),
+        ("siege",           "HTTP load tester"),
+        ("ab",              "Apache bench stress test"),
+        ("slowhttptest",    "Slow HTTP DoS tester"),
+        ("goldeneye",       "HTTP DoS test tool"),
+        ("wrk",             "Modern HTTP benchmark"),
+        ("locust",          "Distributed load tester"),
+        ("jmeter",          "Java load test tool"),
+        ("nping",           "Network packet generator"),
+        ("scapy",           "Packet manipulation"),
+        ("ostinato",        "Packet crafter & generator"),
+    ],
+    "Privilege Escalation": [
+        ("linux-exploit-suggester", "Linux privesc suggester"),
+        ("linux-smart-enumeration", "Linux enum for privesc"),
+        ("linenum",         "Linux enumeration script"),
+        ("pspy",            "Monitor Linux processes"),
+        ("sudo-killer",     "Sudo misconfiguration finder"),
+        ("suid3num",        "SUID binary finder"),
+        ("winpeas",         "Windows privesc checker"),
+        ("linpeas",         "Linux privesc checker"),
+        ("wesng",           "Windows exploit suggester NG"),
+        ("powerup",         "PowerShell privesc"),
+        ("jaws",            "Windows auto enum script"),
+        ("sessiongopher",   "Session/credential extractor"),
+        ("lazagne",         "Credential recovery tool"),
+        ("mimikatz",        "Windows credential dumper"),
+        ("incognito",       "Token impersonation tool"),
+        ("juicypotato",     "Windows token privesc"),
+        ("printspoofer",    "Windows spoofer privesc"),
+        ("chisel",          "TCP/UDP tunnel over HTTP"),
+        ("plink",           "Putty link for tunneling"),
+        ("crackmapexec",    "Network pivoting toolkit"),
+    ],
+    "Container Security": [
+        ("docker",          "Container platform"),
+        ("docker-compose",  "Multi-container orchestrator"),
+        ("trivy",           "Container vulnerability scanner"),
+        ("grype",           "Container & filesystem scanner"),
+        ("dive",            "Docker image explorer"),
+        ("clair",           "Container static analysis"),
+        ("falco",           "Container runtime security"),
+        ("kubeaudit",       "Kubernetes security audit"),
+        ("kube-bench",      "Kubernetes CIS benchmark"),
+        ("kube-hunter",     "Kubernetes penetration test"),
+        ("kubectl",         "Kubernetes CLI"),
+        ("helm",            "Kubernetes package manager"),
+        ("sysdig",          "Container visibility tool"),
+        ("tracee",          "eBPF runtime security"),
+        ("tetragon",        "eBPF security observability"),
+        ("anchore-cli",     "Container policy CLI"),
+    ],
+    "Crypto & Anonymity": [
+        ("openssl",         "Crypto & PKI Swiss knife"),
+        ("gpg",             "GNU Privacy Guard"),
+        ("ccrypt",          "File encryption tool"),
+        ("hashdeep",        "Recursive hash tool"),
+        ("md5deep",         "MD5 hash recursive"),
+        ("sha256deep",      "SHA256 hash tool"),
+        ("ssdeep",          "Fuzzy hashing tool"),
+        ("dc3dd",           "DoD forensic dd"),
+        ("cryptcat",        "Encrypted netcat"),
+        ("stunnel4",        "SSL tunnel daemon"),
+        ("tor",             "Onion routing anonymizer"),
+        ("proxychains4",    "TCP proxy tool"),
+        ("anonsurf",        "System-wide anonymizer"),
+        ("macchanger",      "MAC address randomizer"),
+        ("bleachbit",       "Privacy cleaner"),
+        ("veracrypt",       "Disk encryption tool"),
+        ("keepassxc",       "Password manager"),
+        ("gnupg",           "OpenPGP encryption"),
+    ],
+}
+
+# Category icons (emoji fallback)
+CAT_ICONS = {
+    "Information Gathering": "🔍",
+    "Web Application":       "🌐",
+    "Password Attacks":      "🔑",
+    "Wireless Attacks":      "📡",
+    "Exploitation":          "💥",
+    "Reverse Engineering":   "🔬",
+    "Forensics & Stego":     "🧪",
+    "Sniffing & Spoofing":   "🕵",
+    "Vulnerability Analysis":"🛡",
+    "Social Engineering":    "🎭",
+    "Stress Testing":        "⚡",
+    "Privilege Escalation":  "🪜",
+    "Container Security":    "📦",
+    "Crypto & Anonymity":    "🔒",
+}
+
+# ─────────────────────────────────────────────
+#  CSS  —  Dark hacker aesthetic
+# ─────────────────────────────────────────────
+CSS = """
+* {
+    font-family: Monospace;
+}
+window {
+    background-color: #0a0a0a;
+    color: #00ff41;
+}
+.hdr {
+    background-color: #050505;
+    border-bottom: 1px solid #1a3a1a;
+    padding: 10px 18px;
+}
+.hdr-title {
+    color: #00ff41;
+    font-size: 18px;
+    font-weight: bold;
+}
+.hdr-sub {
+    color: #336633;
+    font-size: 10px;
+}
+.hdr-stat {
+    color: #336633;
+    font-size: 10px;
+}
+.hdr-stat-val {
+    color: #00ff41;
+    font-size: 10px;
+    font-weight: bold;
+}
+.sidebar {
+    background-color: #050505;
+    border-right: 1px solid #1a3a1a;
+}
+.sidebar-search {
+    background-color: #0d150d;
+    color: #00ff41;
+    border: 1px solid #1a5c1a;
+    border-radius: 3px;
+    padding: 5px 10px;
+    font-size: 11px;
+    margin: 8px;
+}
+.cat-btn {
+    background-color: #050505;
+    border: none;
+    border-left: 2px solid #050505;
+    color: #336633;
+    padding: 7px 14px;
+    border-radius: 0;
+    font-size: 11px;
+}
+.cat-btn:hover {
+    background-color: #0d1a0d;
+    color: #00cc33;
+    border-left-color: #00aa22;
+}
+.cat-btn.active {
+    background-color: #0a1f0a;
+    color: #00ff41;
+    border-left: 2px solid #00ff41;
+}
+.tool-card {
+    background-color: #0a0f0a;
+    border: 1px solid #1a2a1a;
+    border-radius: 4px;
+    margin: 3px 10px;
+    padding: 9px 12px;
+}
+.tool-card:hover {
+    background-color: #0d150d;
+    border-color: #2a5a2a;
+}
+.tool-name {
+    color: #00ff41;
+    font-weight: bold;
+    font-size: 12px;
+}
+.tool-desc {
+    color: #336633;
+    font-size: 10px;
+}
+.btn-install {
+    background-color: #0a1f0a;
+    color: #00ff41;
+    border: 1px solid #2a5a2a;
+    border-radius: 3px;
+    padding: 3px 14px;
+    font-size: 10px;
+    min-width: 80px;
+}
+.btn-install:hover {
+    background-color: #0f2e0f;
+    border-color: #00ff41;
+}
+.btn-install-all {
+    background-color: #0a1f0a;
+    color: #00ff41;
+    border: 1px solid #2a5a2a;
+    border-radius: 3px;
+    padding: 4px 14px;
+    font-size: 10px;
+    margin: 6px 10px;
+}
+.btn-install-all:hover {
+    background-color: #0f2e0f;
+}
+.btn-uninstalled-only {
+    background-color: #1a1400;
+    color: #ccaa00;
+    border: 1px solid #4a3a00;
+    border-radius: 3px;
+    padding: 4px 14px;
+    font-size: 10px;
+    margin: 6px 2px;
+}
+.btn-uninstalled-only:hover {
+    background-color: #221a00;
+}
+.lbl-installed {
+    color: #00ff41;
+    font-size: 10px;
+    font-weight: bold;
+}
+.lbl-failed {
+    color: #ff3333;
+    font-size: 10px;
+}
+.lbl-installing {
+    color: #ccaa00;
+    font-size: 10px;
+}
+progressbar trough {
+    background-color: #0a0f0a;
+    border-radius: 2px;
+    min-height: 6px;
+}
+progressbar progress {
+    background-color: #00ff41;
+    border-radius: 2px;
+}
+.term {
+    background-color: #000500;
+    color: #00ff41;
+    font-size: 10px;
+    padding: 6px 10px;
+    border-top: 1px solid #1a3a1a;
+}
+.statsbar {
+    background-color: #050505;
+    border-top: 1px solid #1a3a1a;
+    padding: 4px 14px;
+}
+.stat-item {
+    color: #336633;
+    font-size: 9px;
+    margin-right: 16px;
+}
+.stat-val {
+    color: #00ff41;
+    font-weight: bold;
+}
+"""
+
+# ─────────────────────────────────────────────
+#  MAIN APP
+# ─────────────────────────────────────────────
+class NiksonCenter(Gtk.Window):
+
+    def __init__(self):
+        super().__init__(title="Nikson Center — v2.0 ULTIMATE")
+        self.set_default_size(1100, 680)
+        self.set_resizable(True)
+
+        self._apply_css()
+
+        self.current_cat = list(TOOLS.keys())[0]
+        self.search_query = ""
+        self.install_status = {}   # tool -> "installing"|"done"|"failed"
+        self.total_tools = sum(len(v) for v in TOOLS.values())
+
+        self._build_ui()
+        self.load_category(self.current_cat)
+        self.show_all()
+        self._refresh_stats()
+
+    # ── CSS ──────────────────────────────────
+    def _apply_css(self):
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS.encode('utf-8'))
+        Gtk.StyleContext.add_provider_for_screen(
+            self.get_screen(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+    # ── Build UI ─────────────────────────────
+    def _build_ui(self):
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(root)
+
+        root.pack_start(self._build_header(), False, False, 0)
+
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        root.pack_start(body, True, True, 0)
+
+        body.pack_start(self._build_sidebar(), False, False, 0)
+        body.pack_start(self._build_main(), True, True, 0)
+
+        root.pack_end(self._build_statsbar(), False, False, 0)
+
+    # ── Header ───────────────────────────────
+    def _build_header(self):
+        hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        hdr.get_style_context().add_class("hdr")
+
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        title = Gtk.Label(label="NIKSON CENTER")
+        title.get_style_context().add_class("hdr-title")
+        title.set_xalign(0)
+        sub = Gtk.Label(label="SECURITY TOOL MANAGER  ·  v2.0 ULTIMATE  ·  375+ TOOLS")
+        sub.get_style_context().add_class("hdr-sub")
+        sub.set_xalign(0)
+        left.pack_start(title, False, False, 0)
+        left.pack_start(sub, False, False, 0)
+        hdr.pack_start(left, True, True, 0)
+
+        # Right side stats
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        right.set_valign(Gtk.Align.CENTER)
+
+        self.hdr_installed_lbl = Gtk.Label()
+        self.hdr_installed_lbl.get_style_context().add_class("hdr-stat-val")
+        self.hdr_installed_lbl.set_xalign(1)
+
+        sys_lbl = Gtk.Label(label=self._get_sysinfo())
+        sys_lbl.get_style_context().add_class("hdr-stat")
+        sys_lbl.set_xalign(1)
+
+        right.pack_start(self.hdr_installed_lbl, False, False, 0)
+        right.pack_start(sys_lbl, False, False, 0)
+        hdr.pack_end(right, False, False, 0)
+
+        return hdr
+
+    # ── Sidebar ──────────────────────────────
+    def _build_sidebar(self):
+        sb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        sb.get_style_context().add_class("sidebar")
+        sb.set_size_request(210, -1)
+
+        # Search
+        self.search_entry = Gtk.Entry()
+        self.search_entry.set_placeholder_text("🔍  Search tools...")
+        self.search_entry.get_style_context().add_class("sidebar-search")
+        self.search_entry.connect("changed", self._on_search_changed)
+        sb.pack_start(self.search_entry, False, False, 0)
+
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sb.pack_start(sep, False, False, 4)
+
+        # Category scroll
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        cat_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        self.cat_buttons = {}
+
+        for cat, tools in TOOLS.items():
+            icon = CAT_ICONS.get(cat, "•")
+            lbl = f"{icon}  {cat}  ({len(tools)})"
+            btn = Gtk.Button(label=lbl)
+            btn.get_style_context().add_class("cat-btn")
+            btn.set_relief(Gtk.ReliefStyle.NONE)
+            btn.connect("clicked", self._on_cat_clicked, cat)
+            cat_box.pack_start(btn, False, False, 0)
+            self.cat_buttons[cat] = btn
+
+        scroll.add(cat_box)
+        sb.pack_start(scroll, True, True, 0)
+
+        return sb
+
+    # ── Main area ────────────────────────────
+    def _build_main(self):
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        # Toolbar
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        toolbar.set_margin_start(8)
+        toolbar.set_margin_end(8)
+        toolbar.set_margin_top(6)
+        toolbar.set_margin_bottom(2)
+
+        self.cat_title_lbl = Gtk.Label()
+        self.cat_title_lbl.get_style_context().add_class("tool-name")
+        self.cat_title_lbl.set_xalign(0)
+        toolbar.pack_start(self.cat_title_lbl, True, True, 0)
+
+        btn_all = Gtk.Button(label="⬇  Install All")
+        btn_all.get_style_context().add_class("btn-install-all")
+        btn_all.connect("clicked", self._install_all_in_cat)
+        toolbar.pack_end(btn_all, False, False, 0)
+
+        btn_missing = Gtk.Button(label="⬇  Missing Only")
+        btn_missing.get_style_context().add_class("btn-uninstalled-only")
+        btn_missing.connect("clicked", self._install_missing_in_cat)
+        toolbar.pack_end(btn_missing, False, False, 0)
+
+        # Progress bar (hidden by default)
+        self.progress = Gtk.ProgressBar()
+        self.progress.set_margin_start(10)
+        self.progress.set_margin_end(10)
+        self.progress.set_margin_bottom(2)
+        self.progress.set_no_show_all(True)
+
+        vbox.pack_start(toolbar, False, False, 0)
+        vbox.pack_start(self.progress, False, False, 0)
+
+        # Tool list scroll
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.tool_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.tool_box.set_margin_top(4)
+        self.tool_box.set_margin_bottom(8)
+        scroll.add(self.tool_box)
+        vbox.pack_start(scroll, True, True, 0)
+
+        # Terminal
+        term_scroll = Gtk.ScrolledWindow()
+        term_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        term_scroll.set_size_request(-1, 90)
+        self.terminal = Gtk.TextView()
+        self.terminal.set_editable(False)
+        self.terminal.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.terminal.get_style_context().add_class("term")
+        self.term_buf = self.terminal.get_buffer()
+        term_scroll.add(self.terminal)
+        vbox.pack_end(term_scroll, False, False, 0)
+
+        return vbox
+
+    # ── Stats bar ────────────────────────────
+    def _build_statsbar(self):
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        bar.get_style_context().add_class("statsbar")
+
+        self.stat_labels = {}
+        for key in ["installed", "total", "categories", "disk"]:
+            lbl = Gtk.Label()
+            lbl.get_style_context().add_class("stat-item")
+            bar.pack_start(lbl, False, False, 0)
+            self.stat_labels[key] = lbl
+
+        return bar
+
+    # ── Load category ────────────────────────
+    def load_category(self, cat, query=""):
+        self.current_cat = cat
+
+        # Sidebar highlight
+        for c, btn in self.cat_buttons.items():
+            ctx = btn.get_style_context()
+            if c == cat:
+                ctx.add_class("active")
+            else:
+                ctx.remove_class("active")
+
+        # Clear
+        for child in self.tool_box.get_children():
+            self.tool_box.remove(child)
+
+        tools = TOOLS.get(cat, [])
+        if query:
+            q = query.lower()
+            tools = [(t, d) for t, d in tools
+                     if q in t.lower() or q in d.lower()]
+
+        title = f"{CAT_ICONS.get(cat,'')}  {cat}  —  {len(tools)} tools"
+        self.cat_title_lbl.set_text(title)
+
+        for tool, desc in tools:
+            self.tool_box.pack_start(
+                self._make_tool_row(tool, desc), False, False, 0)
+
+        self.tool_box.show_all()
+
+    # ── Tool row ─────────────────────────────
+    def _make_tool_row(self, tool, desc):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row.get_style_context().add_class("tool-card")
+
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        nm = Gtk.Label(label=tool)
+        nm.get_style_context().add_class("tool-name")
+        nm.set_xalign(0)
+        ds = Gtk.Label(label=desc)
+        ds.get_style_context().add_class("tool-desc")
+        ds.set_xalign(0)
+        info.pack_start(nm, False, False, 0)
+        info.pack_start(ds, False, False, 0)
+        row.pack_start(info, True, True, 0)
+
+        # Status widget
+        status_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        row.pack_end(status_box, False, False, 0)
+        self._set_tool_status_widget(status_box, tool)
+
+        return row
+
+    def _set_tool_status_widget(self, box, tool):
+        # Clear box
+        for c in box.get_children():
+            box.remove(c)
+
+        st = self.install_status.get(tool)
+
+        if st == "installing":
+            lbl = Gtk.Label(label="⏳ Installing...")
+            lbl.get_style_context().add_class("lbl-installing")
+            box.pack_start(lbl, False, False, 0)
+
+        elif st == "done" or self._is_installed(tool):
+            lbl = Gtk.Label(label="✓  Installed")
+            lbl.get_style_context().add_class("lbl-installed")
+            box.pack_start(lbl, False, False, 0)
+
+        elif st == "failed":
+            lbl = Gtk.Label(label="✗  Failed")
+            lbl.get_style_context().add_class("lbl-failed")
+            box.pack_start(lbl, False, False, 0)
+            btn = Gtk.Button(label="Retry")
+            btn.get_style_context().add_class("btn-install")
+            btn.connect("clicked", lambda b: self._do_install(tool, box))
+            box.pack_start(btn, False, False, 4)
+
+        else:
+            btn = Gtk.Button(label="Install")
+            btn.get_style_context().add_class("btn-install")
+            btn.connect("clicked", lambda b: self._do_install(tool, box))
+            box.pack_start(btn, False, False, 0)
+
+        box.show_all()
+
+    # ── Install single ───────────────────────
+    def _do_install(self, tool, status_box):
+        self.install_status[tool] = "installing"
+        self._set_tool_status_widget(status_box, tool)
+        self._log(f"Installing {tool}...")
+
+        def run():
+            ret = subprocess.run(
+                ["sudo", "apt", "install", "-y", tool],
+                capture_output=True, text=True
+            ).returncode
+            if ret != 0:
+                ret = subprocess.run(
+                    ["pip3", "install", tool],
+                    capture_output=True, text=True
+                ).returncode
+            GLib.idle_add(self._install_done, tool, status_box, ret)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _install_done(self, tool, status_box, code):
+        self.install_status[tool] = "done" if code == 0 else "failed"
+        if code == 0:
+            self._log(f"✓  {tool} installed successfully")
+        else:
+            self._log(f"✗  {tool} installation failed")
+        self._set_tool_status_widget(status_box, tool)
+        self._refresh_stats()
+
+    # ── Install all / missing in category ────
+    def _install_all_in_cat(self, *_):
+        tools = [t for t, _ in TOOLS[self.current_cat]]
+        self._batch_install(tools)
+
+    def _install_missing_in_cat(self, *_):
+        tools = [t for t, _ in TOOLS[self.current_cat]
+                 if not self._is_installed(t)
+                 and self.install_status.get(t) != "done"]
+        if not tools:
+            self._log("All tools in this category are already installed!")
+            return
+        self._batch_install(tools)
+
+    def _batch_install(self, tools):
+        if not tools:
+            self._log("Nothing to install.")
+            return
+
+        self._log(f"Batch installing {len(tools)} tools...")
+        self.progress.set_fraction(0)
+        self.progress.show()
+
+        def run():
+            subprocess.run(["sudo", "apt", "update", "-qq"],
+                           capture_output=True)
+            done = 0
+            for tool in tools:
+                GLib.idle_add(self._log, f"  → {tool}...")
+                ret = subprocess.run(
+                    ["sudo", "apt", "install", "-y", tool],
+                    capture_output=True, text=True
+                ).returncode
+                if ret != 0:
+                    ret = subprocess.run(
+                        ["pip3", "install", tool],
+                        capture_output=True, text=True
+                    ).returncode
+                self.install_status[tool] = "done" if ret == 0 else "failed"
+                done += 1
+                frac = done / len(tools)
+                GLib.idle_add(self.progress.set_fraction, frac)
+                GLib.idle_add(self._log,
+                    f"  {'✓' if ret==0 else '✗'} {tool}")
+
+            GLib.idle_add(self._batch_done, len(tools))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _batch_done(self, total):
+        self._log(f"Batch install complete — {total} tools processed")
+        self.progress.hide()
+        self.load_category(self.current_cat, self.search_query)
+        self._refresh_stats()
+
+    # ── Search ───────────────────────────────
+    def _on_search_changed(self, entry):
+        q = entry.get_text().strip()
+        self.search_query = q
+        if q:
+            self._search_all(q)
+        else:
+            self.load_category(self.current_cat)
+
+    def _search_all(self, q):
+        ql = q.lower()
+        for c in self.tool_box.get_children():
+            self.tool_box.remove(c)
+
+        found = 0
+        for cat, tools in TOOLS.items():
+            for tool, desc in tools:
+                if ql in tool.lower() or ql in desc.lower():
+                    self.tool_box.pack_start(
+                        self._make_tool_row(tool, desc), False, False, 0)
+                    found += 1
+
+        self.cat_title_lbl.set_text(
+            f"🔍  Search: \"{q}\"  —  {found} results")
+        self.tool_box.show_all()
+
+    # ── Category clicked ─────────────────────
+    def _on_cat_clicked(self, btn, cat):
+        self.search_entry.set_text("")
+        self.search_query = ""
+        self.load_category(cat)
+
+    # ── Stats refresh ────────────────────────
+    def _refresh_stats(self):
+        inst = sum(1 for cat in TOOLS.values()
+                   for t, _ in cat if self._is_installed(t))
+
+        self.hdr_installed_lbl.set_text(
+            f"{inst} / {self.total_tools} installed")
+
+        self.stat_labels["installed"].set_markup(
+            f'<span foreground="#4a6070">Installed: </span>'
+            f'<span foreground="#00ff41"><b>{inst}</b></span>  ')
+        self.stat_labels["total"].set_markup(
+            f'<span foreground="#4a6070">Total: </span>'
+            f'<span foreground="#00d4ff"><b>{self.total_tools}</b></span>  ')
+        self.stat_labels["categories"].set_markup(
+            f'<span foreground="#4a6070">Categories: </span>'
+            f'<span foreground="#00d4ff"><b>{len(TOOLS)}</b></span>  ')
+        try:
+            disk = subprocess.run(
+                ["df", "-h", "/"], capture_output=True, text=True
+            ).stdout.split("\n")[1].split()[3]
+            self.stat_labels["disk"].set_markup(
+                f'<span foreground="#4a6070">Free disk: </span>'
+                f'<span foreground="#ffd700"><b>{disk}</b></span>')
+        except Exception:
+            pass
+
+    # ── Helpers ──────────────────────────────
+    def _is_installed(self, tool):
+        return shutil.which(tool) is not None
+
+    def _log(self, msg):
+        end = self.term_buf.get_end_iter()
+        self.term_buf.insert(end, f"[nikson] {msg}\n")
+        # Auto scroll
+        mark = self.term_buf.create_mark(None,
+            self.term_buf.get_end_iter(), False)
+        self.terminal.scroll_to_mark(mark, 0, True, 0, 1)
+
+    def _get_sysinfo(self):
+        try:
+            with open('/etc/os-release') as f:
+                for line in f:
+                    if line.startswith('PRETTY_NAME'):
+                        return line.split('=')[1].strip().strip('"')
+        except Exception:
+            pass
+        return "Linux"
+
+# ─────────────────────────────────────────────
+#  ENTRY POINT
+# ─────────────────────────────────────────────
+if __name__ == "__main__":
+    app = NiksonCenter()
+    app.connect("destroy", Gtk.main_quit)
+    Gtk.main()
